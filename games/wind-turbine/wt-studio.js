@@ -1,5 +1,8 @@
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { createLandscape } from './wt-landscape.js?v=0.2.0';
+import { createMeasurements } from './wt-measurements.js?v=0.2.0';
+import { windBudget, MAX_PARTICLES } from './wt-airflow.js?v=0.2.0';
 import { createWindRenderer } from './wt-ao.js?v=0.2.0';
 
 export function createStudio(canvas, camera, turbine, wind) {
@@ -22,7 +25,7 @@ export function createStudio(canvas, camera, turbine, wind) {
   key.target.position.set(0, -1.8, 1);
   key.castShadow = true;
   key.shadow.mapSize.set(1024, 1024);
-  Object.assign(key.shadow.camera, { left: -13, right: 13, top: 14, bottom: -15, near: 9, far: 52 });
+  Object.assign(key.shadow.camera, { left: -13, right: 13, top: 14, bottom: -15, near: 8, far: 64 });
   key.shadow.camera.updateProjectionMatrix();
   key.shadow.bias = -0.00035;
   key.shadow.normalBias = 0.015;
@@ -30,16 +33,19 @@ export function createStudio(canvas, camera, turbine, wind) {
   rim.position.set(-12, 6, -10);
   scene.add(fill, key, key.target, rim, turbine.root, wind.mesh);
 
+  const motion = window.matchMedia('(prefers-reduced-motion: reduce)');
+  const reduced = () => windBudget(window.navigator, window.innerWidth, motion.matches) < MAX_PARTICLES;
+  const coast = createLandscape(scene, { key, fill }, reduced());
+  const measurements = createMeasurements(document);
+  scene.add(measurements.group);
+  motion.addEventListener('change', () => coast.setReduced(reduced()));
   let lastTheme;
   function syncTheme() {
     const theme = document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light';
     if (lastTheme === theme) return;
     lastTheme = theme;
-    const dark = theme === 'dark', background = dark ? 0x0b1220 : 0xeef3fa;
-    scene.background = new THREE.Color(background);
-    scene.fog = new THREE.Fog(background, 34, 82);
-    fill.intensity = dark ? 0.85 : 1.15;
-    key.intensity = dark ? 2.0 : 2.2;
+    const dark = theme === 'dark';
+    coast.setTheme(dark);
     rim.intensity = dark ? 1.0 : 0.6;
     turbine.applyTheme(theme);
     wind.applyTheme(dark);
@@ -47,5 +53,11 @@ export function createStudio(canvas, camera, turbine, wind) {
   syncTheme();
   window.addEventListener('arcade:theme-changed', syncTheme);
   new MutationObserver(syncTheme).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
-  return createWindRenderer(renderer, scene, camera, key);
+  const pipe = createWindRenderer(renderer, scene, camera, key);
+  const resize = pipe.resize;
+  pipe.resize = (w, h) => { coast.setReduced(reduced()); resize(w, h); };
+  pipe.setMeasurements = measurements.set;
+  pipe.resizeLabels = height => measurements.resizeLabels(height, camera);
+  pipe.updateWeather = coast.update;
+  return pipe;
 }

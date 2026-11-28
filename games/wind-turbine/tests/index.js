@@ -5,3 +5,4 @@ import './wind-geometry.test.mjs';
 import './wind-settings.test.mjs';
 import './wind-explosion.test.mjs';
 import './wind-machinery.test.mjs';
+import './wind-coast-froude.test.mjs';

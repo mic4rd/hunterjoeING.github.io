@@ -41,26 +41,44 @@ export function createAccess(group, mats, shell, covers) {
   for (let i = 0; i < rungs.count; i++) rungs.setMatrixAt(i, matrix.makeTranslation(-0.265, -4.38 + i * 0.221, 0.45));
   rungs.name = 'Leitersprossen'; group.add(rungs);
   for (const x of [0.008, 0.452]) {
-    mesh(group, 'Liftführungsseil', new T.CylinderGeometry(0.010, 0.010, 10.0, 8), mats.steelBright, x, 0.50, -0.26);
+    mesh(group, 'Liftführungsseil', new T.CylinderGeometry(0.016, 0.016, 10.0, 8), mats.steelBright, x, 0.50, -0.26);
   }
   const lift = new T.Group(); lift.name = 'Service-Lift';
   lift.position.set(0.23, -4.48, -0.26); group.add(lift);
-  for (const height of [0.05, 0.70]) box(lift, 'Kabinenrahmen', 0.42, 0.07, 0.43, mats.gearGold, 0, height, 0);
+  const safetyYellow = new T.MeshStandardMaterial({
+    color: 0xffcf19, roughness: .54, metalness: .15,
+    emissive: 0xffb900, emissiveIntensity: .14
+  });
+  for (const height of [0.05, 0.83]) box(lift, 'Kabinenrahmen', 0.42, 0.07, 0.43, safetyYellow, 0, height, 0);
   for (const x of [-0.184, 0.184]) for (const z of [-0.18, 0.18])
-    box(lift, 'Kabinenstrebe', 0.035, 0.64, 0.035, mats.steelBright, x, 0.375, z);
+    box(lift, 'Kabinenstrebe', 0.052, 0.75, 0.052, safetyYellow, x, 0.44, z);
+  for (const x of [-0.11, 0, 0.11]) box(lift, 'Türgitter', .017, .54, .022, mats.steelDark, x, .50, .19);
+  for (const y of [.38, .55, .70]) box(lift, 'Querstrebe', .40, .025, .024, safetyYellow, 0, y, .19);
   box(lift, 'Kabinenrückwand', 0.39, 0.44, 0.027, mats.gearSteel, 0, 0.29, -0.18);
-  box(lift, 'Kabinentür', 0.39, 0.19, 0.027, mats.gearGold, 0, 0.19, 0.18);
+  box(lift, 'Kabinentür', 0.39, 0.19, 0.027, safetyYellow, 0, 0.19, 0.18);
   const leaf = box(group, 'Turmtür', 0.50, 0.95, 0.055, mats.steelDark.clone(), 0, -4.00, 1.534);
   shell(leaf); covers.push(leaf);
   const handle = box(group, 'Türgriff', 0.085, 0.025, 0.035, mats.gearGold, 0.16, -4.02, 1.577);
   // Hide the handle with its leaf while preserving its own material.
   for (const x of [-0.285, 0.285]) box(group, 'Türzarge', 0.065, 1.07, 0.12, mats.steelBright, x, -4.0, 1.503);
   box(group, 'Türsturz', 0.635, 0.065, 0.12, mats.steelBright, 0, -3.49, 1.503);
-  let travel = 0;
-  return (dt, open, cut) => {
-    handle.visible = cut < 0.92;
-    if (open) travel += dt * 0.17;
-    lift.position.y = -4.48 + (1 - Math.cos(travel)) * 4.55;
+  let travel = Math.PI / 2, inTour = false, stationTime = 0;
+  return {
+    setTour(active) {
+      if (active && !inTour) stationTime = 0;
+      inTour = active;
+    },
+    update(dt, open, cut) {
+      handle.visible = cut < 0.92;
+      if (inTour) {
+        stationTime += dt;
+        // The short demonstration trip keeps the door and cabin in the same view.
+        lift.position.y = -4.48 + (1 - Math.cos(stationTime * .32)) * .91;
+      } else {
+        if (open) travel += dt * .17;
+        lift.position.y = -4.48 + (1 - Math.cos(travel)) * 4.55;
+      }
+    }
   };
 }
 

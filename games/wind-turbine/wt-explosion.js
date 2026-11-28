@@ -1,3 +1,4 @@
+import { highestGround, terrainHeight } from './wt-terrain.js?v=0.2.0';
 import * as THREE from 'three';
 import { ROTOR } from './wt-rotor.js?v=0.2.0';
 
@@ -43,14 +44,35 @@ function createSound(win) {
     burst() { stop(); if (!muted()) win?.ArcadeAudio?.explosion?.(); } };
 }
 
+// The full blade box has empty corners well outside the tapered tip.
+// Keep each strip of the rendered airfoil and the root collar as a separate support.
+function bladeStrips(pivot) {
+  const strips = [], width = ROTOR.profileSegments + 1;
+  for (const mesh of pivot.children) {
+    const points = mesh.geometry.attributes.position;
+    const step = mesh.geometry.type === 'BufferGeometry' ? width : points.count;
+    mesh.updateMatrix();
+    for (let start = 0; start < points.count; start += step) {
+      const end = Math.min(start + 2 * step, points.count);
+      const strip = [];
+      for (let i = start; i < end; i++) {
+        strip.push(new THREE.Vector3().fromBufferAttribute(points, i).applyMatrix4(mesh.matrix));
+      }
+      strips.push(strip);
+      if (end === points.count) break;
+    }
+  }
+  return strips;
+}
+
 // All rigid bodies keep their original parents. Ballistics uses their centres
 // in world space and converts the result back into each parent's local frame.
-export function createTurbineAccident({ root, groups, blades, spinning, brake, shells, hidden, floorY, win }) {
+export function createTurbineAccident({ root, groups, blades, spinning, brake, shells, hidden, win }) {
   const state = { phase: 'idle', elapsed: 0, rpm: 0, quip: '' };
   const sound = createSound(win);
   const bodies = [...blades, ...Array.from(groups).filter(([id]) =>
     !['blades', 'tower', 'serviceAccess', 'transformer'].includes(id)).map(([, node]) => node)].map(node => ({
-    node, centre: new THREE.Vector3(), half: new THREE.Vector3(), pos: new THREE.Vector3(),
+      node, strips: blades.includes(node) ? bladeStrips(node) : null, centre: new THREE.Vector3(), half: new THREE.Vector3(), pos: new THREE.Vector3(),
     vel: new THREE.Vector3(), spin: new THREE.Vector3(), rot: new THREE.Quaternion(),
     inverseParent: new THREE.Matrix4(), inverseRotation: new THREE.Quaternion(), resting: false
   }));
@@ -104,9 +126,10 @@ export function createTurbineAccident({ root, groups, blades, spinning, brake, s
       bounds.makeEmpty();
       node.traverse(child => {
         if (!child.isMesh || !child.visible) return;
-        if (!child.geometry.boundingBox) child.geometry.computeBoundingBox();
+        const source = child.isInstancedMesh ? child : child.geometry;
+        if (!source.boundingBox) source.computeBoundingBox();
         matrix.multiplyMatrices(b.inverseParent, child.matrixWorld);
-        bounds.union(box.copy(child.geometry.boundingBox).applyMatrix4(matrix));
+        bounds.union(box.copy(source.boundingBox).applyMatrix4(matrix));
       });
       bounds.getCenter(b.centre); bounds.getSize(b.half).multiplyScalar(0.5);
       b.pos.copy(b.centre).applyMatrix4(node.matrixWorld);
@@ -129,9 +152,24 @@ export function createTurbineAccident({ root, groups, blades, spinning, brake, s
     matrix.makeRotationFromQuaternion(b.rot);
     const m = matrix.elements;
     const bottom = b.pos.y - Math.abs(m[1]) * b.half.x - Math.abs(m[5]) * b.half.y - Math.abs(m[9]) * b.half.z;
-    if (bottom <= floorY) {
-      b.pos.y += floorY - bottom;
-      if (dustTime === Infinity) { dust.copy(b.pos); dust.y = floorY; dustTime = state.elapsed; }
+    const hx = Math.abs(m[0]) * b.half.x + Math.abs(m[4]) * b.half.y + Math.abs(m[8]) * b.half.z;
+    const hz = Math.abs(m[2]) * b.half.x + Math.abs(m[6]) * b.half.y + Math.abs(m[10]) * b.half.z;
+    let penetration = highestGround(b.pos.x - hx, b.pos.z - hz, b.pos.x + hx, b.pos.z + hz) - bottom;
+    if (penetration >= 0 && b.strips) {
+      penetration = -Infinity;
+      for (const strip of b.strips) {
+        box.makeEmpty();
+        for (const vertex of strip) {
+          point.copy(vertex).sub(b.centre).applyMatrix4(matrix).add(b.pos);
+          box.expandByPoint(point);
+        }
+        const surface = highestGround(box.min.x, box.min.z, box.max.x, box.max.z);
+        penetration = Math.max(penetration, surface - box.min.y);
+      }
+    }
+    if (penetration >= 0) {
+      b.pos.y += penetration;
+      if (dustTime === Infinity) { dust.copy(b.pos); dust.y = terrainHeight(dust.x, dust.z); dustTime = state.elapsed; }
       b.vel.y = Math.max(0, -b.vel.y * 0.24);
       b.vel.x *= 0.67; b.vel.z *= 0.67; b.spin.multiplyScalar(0.45);
       b.resting = b.vel.y < 0.19 && b.spin.lengthSq() < 0.08;
@@ -152,7 +190,7 @@ export function createTurbineAccident({ root, groups, blades, spinning, brake, s
       const size = (0.16 + life * 0.78) * Math.sin(Math.PI * life);
       matrix.makeScale(size, size * (impact ? 0.55 : 1.15), size);
       matrix.setPosition((impact ? dust.x : 0) + Math.cos(angle) * spread,
-        (impact ? floorY + 0.15 : 0.65) + life * (impact ? 0.85 : 5), (impact ? dust.z : 0) + Math.sin(angle) * spread);
+        (impact ? dust.y + 0.15 : 0.65) + life * (impact ? 0.85 : 5), (impact ? dust.z : 0) + Math.sin(angle) * spread);
       smoke.setMatrixAt(count++, matrix);
     }
     smoke.count = count;

@@ -53,12 +53,14 @@ export function createVolumeSeeder(sample) {
     const id = initial ? index + 1 : ++serial;
     const area = halton(id, 2), az = halton(id, 3);
     let x = INLET_RADIUS * Math.sqrt(area), y = 0, distance = INLET;
+    p.travel = 0;
     if (initial) {
       const weight = area * cdf[BANDS];
       const band = interval(cdf, 0, BANDS, weight);
       const start = band * STRIDE, duration = cdf[band + 1] - cdf[band];
       const scale = Math.sqrt((band + (weight - cdf[band]) / duration) / (band + 0.5));
       const age = halton(id, 5) * duration;
+      p.travel = age;
       const slice = interval(times, start, SLICES, age);
       const k = start + slice, f = (age - times[k]) / (times[k + 1] - times[k]);
       x = (rx[k] + f * (rx[k + 1] - rx[k])) * scale;

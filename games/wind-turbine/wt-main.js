@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import { frameTourContent } from './wt-measurements.js?v=0.2.0';
+import { froudePanel, updateFroudePanel } from './wt-froude-panel.js?v=0.2.0';
 import { createAccidentControls } from './wt-accident-controls.js?v=0.2.0';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { createStudio } from './wt-studio.js?v=0.2.0';
@@ -13,7 +15,7 @@ import {
 import { createWindTurbineModel } from './wt-model.js?v=0.2.0';
 
 const DEFAULT_CAMERA = {
-  normal: { pos: [28, 7, 28], target: [0, -1.1, 3] },
+  normal: { pos: [47, 10, 22], target: [0, -0.8, 3] },
   cutaway: { pos: [8.6, 2.3, 4.6], target: [0.0, 0.15, 0.2] },
   xray: { pos: [10.5, 2.6, 7.6], target: [0.0, -0.4, 0.0] },
   exploded: { pos: [23, 5, 25], target: [0, -2.8, 2.0] }
@@ -28,14 +30,14 @@ function init() {
   // =========================================================================
   // THREE.JS RENDERER & STUDIO SCENE
   // =========================================================================
-  const camera = new THREE.PerspectiveCamera(42, 16 / 9, 0.1, 140);
+  const camera = new THREE.PerspectiveCamera(42, 16 / 9, 0.1, 320);
   camera.position.set(...DEFAULT_CAMERA.normal.pos);
 
   const controls = new OrbitControls(camera, canvas);
   controls.enableDamping = true;
   controls.dampingFactor = 0.07;
   controls.minDistance = 3.2;
-  controls.maxDistance = 72;
+  controls.maxDistance = 145;
   controls.maxPolarAngle = Math.PI * 0.68;
   controls.target.set(...DEFAULT_CAMERA.normal.target);
 
@@ -60,7 +62,7 @@ function init() {
     if (overview) fitOverview(camAnim.endPos, camAnim.endTarget);
   }
   function fitOverview(position, target) {
-    const scale = Math.min(1.65, Math.max(1, 0.86 / camera.aspect));
+    const scale = Math.max(1, 1.12 * camera.zoom / camera.aspect);
     position.sub(target).multiplyScalar(scale).add(target);
   }
   controls.addEventListener('start', () => {
@@ -77,6 +79,7 @@ function init() {
     flowVisible: true,
     selectedPart: null,
     tourActive: false,
+    froude: false,
     tourIndex: 0
   };
 
@@ -297,6 +300,8 @@ function init() {
 
   function updateTelemetryUI() {
     telemetry = computeTurbineTelemetry(appState.windSpeed);
+    studio.setMeasurements(appState.froude, telemetry);
+    if (appState.froude) updateFroudePanel(document, telemetry);
     if (elWindSlider && Number(elWindSlider.value) !== appState.windSpeed) {
       elWindSlider.value = String(appState.windSpeed);
     }
@@ -329,8 +334,9 @@ function init() {
   }
 
   function setViewMode(mode, shouldFly = true) {
+    if (shouldFly && appState.tourActive && (mode === 'exploded' || appState.froude ||
+      TURBINE_TOUR_STEPS[appState.tourIndex].focusPart === 'serviceAccess')) stopTour();
     if (mode === 'exploded') {
-      if (appState.tourActive) stopTour();
       if (accidentUI.start(telemetry, appState.viewMode)) {
         flyCamera(DEFAULT_CAMERA.exploded.pos, DEFAULT_CAMERA.exploded.target, 0.65, true);
       }
@@ -395,6 +401,9 @@ function init() {
 
     const step = TURBINE_TOUR_STEPS[appState.tourIndex];
     const total = TURBINE_TOUR_STEPS.length;
+    appState.froude = step.lesson === 'froude';
+    turbine.setAccessTour(step.focusPart === 'serviceAccess');
+    elTourCard.classList.toggle('wt-froude-open', appState.froude);
     elTourCard.innerHTML = `
       <div class="wt-tour-top">
         <span class="wt-tour-step-pill">Schritt ${step.step} / ${total}</span>
@@ -403,6 +412,7 @@ function init() {
       </div>
       <h3 class="wt-tour-title">${step.title}</h3>
       <p class="wt-tour-body">${step.body}</p>
+      ${appState.froude ? froudePanel : ''}
       <div class="wt-tour-footer">
         <div class="wt-tour-dots">
           ${TURBINE_TOUR_STEPS.map((_, idx) => `<button type="button" class="wt-tour-dot ${idx === appState.tourIndex ? 'active' : ''}" data-tour-goto="${idx}" aria-label="Schritt ${idx + 1}"></button>`).join('')}
@@ -414,11 +424,14 @@ function init() {
       </div>
     `;
 
+    fitTourFrame();
     // Zustand & Kamera für diesen Schritt anwenden
     setViewMode(step.viewMode, false);
-    setWindSpeed(step.demoWind);
+    if (step.demoWind !== undefined) setWindSpeed(step.demoWind);
+    else updateTelemetryUI();
+    if (appState.froude) document.getElementById('wt-fr-slider')?.addEventListener('input', e => setWindSpeed(e.target.value));
     selectPart(step.focusPart, false);
-    if (step.step === 1) setFlow(true);
+    if (step.step === 1 || appState.froude) setFlow(true);
     flyCamera(step.cameraPos, step.cameraTarget, 0.95, step.viewMode === 'normal');
 
     document.getElementById('wt-tour-end')?.addEventListener('click', () => stopTour());
@@ -452,7 +465,11 @@ function init() {
 
   function stopTour() {
     appState.tourActive = false;
+    appState.froude = false;
+    studio.setMeasurements(false, telemetry);
+    turbine.setAccessTour(false);
     if (elTourCard) elTourCard.classList.add('hidden');
+    fitTourFrame();
     if (elTourStartBtn) elTourStartBtn.classList.remove('active');
     if (window.ArcadeAudio) window.ArcadeAudio.click();
   }
@@ -551,12 +568,25 @@ function init() {
   updateTelemetryUI();
   selectPart(null, false);
 
+  // Keep the three sections or the access demonstration between the toolbar and
+  // the tour card. Only UI/resize events touch the projection, never the render loop.
+  function fitTourFrame() {
+    const w = viewport.clientWidth, h = viewport.clientHeight;
+    let top = 0, bottom = h;
+    if (appState.tourActive && (appState.froude || TURBINE_TOUR_STEPS[appState.tourIndex].focusPart === 'serviceAccess')) {
+      const toolbar = document.getElementById('wt-mode-dock');
+      top = toolbar.offsetTop + toolbar.offsetHeight + 4;
+      bottom = elTourCard.offsetTop - 5;
+    }
+    frameTourContent(camera, w, h, top, bottom);
+    studio.resizeLabels(h);
+  }
+
   // Resize Handling
   function handleResize() {
     const w = Math.max(1, viewport.clientWidth);
     const h = Math.max(1, viewport.clientHeight);
-    camera.aspect = w / h;
-    camera.updateProjectionMatrix();
+    fitTourFrame();
     studio.resize(w, h);
     wind.resize();
   }
@@ -564,6 +594,7 @@ function init() {
   fitOverview(camera.position, controls.target);
   const resizeObs = new ResizeObserver(handleResize);
   resizeObs.observe(viewport);
+  new ResizeObserver(fitTourFrame).observe(elTourCard);
 
   // =========================================================================
   // RENDER LOOP
@@ -589,6 +620,7 @@ function init() {
     const pose = turbine.update(dt, telemetry);
     accidentUI.frame();
     wind.update(dt, telemetry, pose, camera, appState.flowVisible && !accidentUI.active);
+    studio.updateWeather(dt, telemetry.windSpeed, appState.froude || appState.viewMode !== 'normal', camera.position.length());
     studio.render(seconds);
     graphics.frame(now);
     updateLabels();

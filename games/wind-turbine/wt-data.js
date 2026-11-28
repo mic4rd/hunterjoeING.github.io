@@ -1,4 +1,4 @@
-// Windkraftanlage 3D – Physik-Modell, Bauteile-Katalog & 7-Schritte-Tour
+// Windkraftanlage 3D – Physik-Modell, Bauteile-Katalog & 8-Schritte-Tour
 export const TURBINE_SPECS = {
   ratedPowerMW: 3.6,
   rotorDiameterM: 126,
@@ -71,6 +71,7 @@ export function computeTurbineTelemetry(windSpeed) {
   const homesPowered = Math.round((powerMW * 1000) / 0.42);
 
   return {
+    sweptArea, availableWindMW,
     windSpeed: v,
     status,
     statusLabel,
@@ -251,7 +252,7 @@ export const TURBINE_PARTS = [
     spec: 'Frequenzumrichter + 20-kV-Transformator',
     description:
       'Der Vollumrichter wandelt den frequenzvariablen Generatorstrom in sauberen 50-Hz-Wechselstrom um. Der Transformator hebt die Spannung auf 20 kV an, um ihn verlustarm ins Stromnetz einzuspeisen.',
-    anchor: [2.2, -9.8, 0.2],
+    anchor: [3.8, -9.8, 0.25],
     cameraPos: [10.0, -7.8, 9.2],
     cameraTarget: [1.4, -9.6, 0.2]
   },
@@ -279,6 +280,13 @@ export const TURBINE_TOUR_STEPS = [
   },
   {
     step: 2,
+    title: 'Froude-Rankine & Betz-Grenze', badge: 'Strahltheorie',
+    lesson: 'froude', viewMode: 'normal', focusPart: 'blades',
+    cameraPos: [47, 5, 17], cameraTarget: [0, 0.5, 2.8],
+    body: 'In der idealen Stromröhre ist das Tempo am Rotor der Mittelwert aus Anströmung und fernem Nachlauf: v<sub>R</sub> = (v₁ + v₃)/2.'
+  },
+  {
+    step: 3,
     title: 'Nabe & aktive Pitch-Regelung',
     badge: 'Leistungsregelung · 0°–86°',
     viewMode: 'cutaway',
@@ -290,7 +298,7 @@ export const TURBINE_TOUR_STEPS = [
       'Ab 12 m/s erreicht die Anlage ihre Nennleistung von 3,6 MW. Damit Rotor und Generator nicht überlasten, drehen elektrische Pitch-Motoren in der Nabe die Blätter schrittweise aus dem Wind. Beobachte, wie sich der Anstellwinkel der Blätter verstellt!'
   },
   {
-    step: 3,
+    step: 4,
     title: 'Hauptwelle & 3-Stufen-Getriebe',
     badge: 'Mechanik · Übersetzung 1 : 92',
     viewMode: 'cutaway',
@@ -302,7 +310,7 @@ export const TURBINE_TOUR_STEPS = [
       'Folge der Hauptwelle zum goldenen Planetenträger. Seine vier Planeten umlaufen das Sonnenrad und treiben es an. Dahinter kämmen zwei Stirnradpaare. Zusammen machen sie aus einer Rotorumdrehung 92 Umdrehungen der Generatorwelle.'
   },
   {
-    step: 4,
+    step: 5,
     title: 'Elektromagnetische Induktion im Generator',
     badge: 'Elektrotechnik · 3,6 MW',
     viewMode: 'xray',
@@ -314,7 +322,7 @@ export const TURBINE_TOUR_STEPS = [
       'Im Röntgenblick siehst du das Herz der Stromerzeugung: Die schnelle Welle treibt den Generator-Rotor im Inneren der kupfernen Statorwicklungen an. Das rotierende Magnetfeld induziert elektrischen Strom – je stärker der Wind, desto intensiver der Energiefluss.'
   },
   {
-    step: 5,
+    step: 6,
     title: 'Azimutantrieb & Sicherheitsbremse',
     badge: 'Steuerung · Windnachführung',
     viewMode: 'cutaway',
@@ -326,15 +334,15 @@ export const TURBINE_TOUR_STEPS = [
       'Der Schalenstern misst die Windgeschwindigkeit, die Fahne zeigt die Richtung. Vier Azimutmotoren drehen die Gondel über den Zahnkranz in den Wind. Übersteigt der Sturm 25 m/s (wie jetzt eingestellt!), gehen die Blätter in Fahnenstellung und die rote Scheibenbremse greift ein.'
   },
   {
-    step: 6,
+    step: 7,
     title: 'Aufstieg für Techniker',
     badge: 'Wartung · Zugang zum Maschinenhaus',
     viewMode: 'cutaway', focusPart: 'serviceAccess', demoWind: 9,
-    cameraPos: [9.3,-5.9,9.4], cameraTarget: [0,-6.1,0],
+    cameraPos: [4.03, -9, 4.03], cameraTarget: [0, -9.3, 0.30],
     body: 'Hinter der Turmtür beginnt der Aufstieg. Der Service-Lift fährt Personen und Werkzeug nach oben. Als Rückfallebene dient die Leiter mit Steigschutzschiene, in die sich Techniker mit dem Läufer am Auffanggurt einklinken. An den Segmentflanschen liegen Ruhepodeste.'
   },
   {
-    step: 7,
+    step: 8,
     title: 'Vom Turm ins Stromnetz',
     badge: 'Stromschienen · Transformator',
     viewMode: 'cutaway',

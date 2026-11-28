@@ -19,7 +19,7 @@ function assignLayer(object) {
     object.layers.enable(OVERLAY);
   } else if (object.material) {
     const m = object.material;
-    const solid = object.isMesh && !object.userData.windParticle && !m.transparent && m.depthWrite && m.blending !== AdditiveBlending;
+    const solid = object.isMesh && !object.userData.windParticle && !object.userData.aoOverlay && !m.transparent && m.depthWrite && m.blending !== AdditiveBlending;
     object.layers.enable(solid ? OPAQUE : OVERLAY);
     object.layers.disable(solid ? OVERLAY : OPAQUE);
   }

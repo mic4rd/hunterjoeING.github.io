@@ -2,7 +2,7 @@ import { TURBINE_SPECS } from './wt-data.js?v=0.2.0';
 import { ROTOR, RADIUS, spinnerRadius } from './wt-rotor.js?v=0.2.0';
 import { contactFrame, orientFrame, slidePastBlades } from './wt-blade-contact.js?v=0.2.0';
 import { densityPercent } from './wt-settings.js?v=0.2.0';
-
+import { axialInduction } from './wt-froude.js?v=0.2.0';
 import { OUTLET, createVolumeSeeder } from './wt-streams.js?v=0.2.0';
 
 export const BEAD_RADIUS = 0.085;
@@ -25,9 +25,7 @@ export function setOperatingPoint(out, telemetry) {
   const v = telemetry.windSpeed;
   out.u = v * 0.68;
   out.lambda = v > 0 ? telemetry.tipSpeedMs / v : 0;
-  out.a = 0;
-  if (telemetry.status === 'partial') out.a = smooth(clamp01((v - TURBINE_SPECS.cutInSpeed) / 2)) / 3;
-  if (telemetry.status === 'rated') out.a = (TURBINE_SPECS.ratedSpeed / v) ** 3 / 3;
+  out.a = axialInduction(telemetry);
   return out;
 }
 
@@ -123,7 +121,8 @@ export function createAirflow(capacity) {
 
   const seeds = createVolumeSeeder(sampleField);
   const contact = new Float32Array(capacity);
-  let lastWind = -1;
+  const tube = new Float32Array(capacity), pulse = new Float32Array(capacity);
+  let lastWind = -1, travel = 0;
 
   function update(dt, telemetry, target, requested) {
     const next = Math.min(requested, capacity);
@@ -145,12 +144,14 @@ export function createAirflow(capacity) {
         const fresh = refill && j === 1;
         if (fresh || positions[offset+2] < pose.bladeZ + OUTLET) {
           seeds.place(p, i, pose.bladeZ, pose.towerY - 5 + BEAD_RADIUS, fresh);
+          pulse[i] = .82 + .18 * Math.cos((travel - p.travel) * (2 * Math.PI / (.55 * RADIUS)));
           contact[i] = 0;
         } else {
           p.x = positions[offset]; p.y = positions[offset+1]; p.z = positions[offset+2];
         }
         const x = p.x, y = p.y, z = p.z;
         sampleField(velocity, x, y - ROTOR.y, pose.bladeZ - z, op);
+        tube[i] = velocity.tube;
         obstacleVelocity(velocity, p, pose);
         if (velocity.y < 0) velocity.y *= clamp01(y - (pose.towerY - 5 + BEAD_RADIUS));
         p.x += velocity.x * h;
@@ -164,11 +165,12 @@ export function createAirflow(capacity) {
         positions[offset + 2] = p.z;
         speedRatio[i] = op.u ? Math.sqrt(velocity.x ** 2 + velocity.y ** 2 + velocity.z ** 2) / op.u : 0;
       }
+      travel += op.u * h;
       count = next;
       const swap = from; from = to; to = swap;
     }
     Object.assign(previous, target);
     count = next;
   }
-  return { positions, speedRatio, contact, update };
+  return { positions, speedRatio, contact, tube, pulse, update };
 }

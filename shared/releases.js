@@ -128,11 +128,11 @@ const arcadeReleases = {
       app: "wind_turbine", version: "0.2.0", date: "2026-11-28", type: "feature", title: "Wind am Rotor sichtbar machen",
       author: "Michi", model: "Astra 6.2",
       highlights: [
-        "Ein dichter Strom blauer Kügelchen zeigt, wie die Luft am Rotor abbremst, an den Blättern abgelenkt wird und sich dahinter aufweitet.",
-        "Im aufgeschnittenen Getriebe kannst du den Planetenrädern und den beiden Stirnradstufen bis zur schnellen Generatorwelle folgen.",
-        "Eine neue Tourstation führt durch die Turmtür zu Leiter, Ruhepodesten und Service-Lift.",
-        "Studiolicht, weiche Schatten und ein rauchgrauer Röntgenblick machen die Bauteile besser erkennbar.",
-        "Im Grafikmenü lassen sich Kontaktschatten, Schatten und Partikeldichte einstellen und die Bildrate ablesen.",
+        "Auf dem Grashügel über dem Meer kannst du beobachten, wie aus einer Brise Sturm mit Schaumkronen wird.",
+        "Der blaue Kugelstrom wird vor dem Rotor dichter. Im breiteren Nachlauf zeigt ein tieferes Blau die langsamere Luft.",
+        "Die Tour erklärt die Betz-Grenze an drei Messebenen. Am Windregler vergleichst du mögliche und tatsächlich erzeugte Leistung.",
+        "Im Schnitt kannst du dem dreistufigen Getriebe bis zum Generator folgen und hinter der Turmtür den Service-Lift entdecken.",
+        "Der rauchgraue Röntgenblick zeigt das Innenleben. Im Grafikmenü stellst du Schatten, Kontaktschatten und Partikeldichte ein.",
       ],
     },
     {

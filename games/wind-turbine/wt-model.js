@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { BASE_Y, terrainHeight } from './wt-terrain.js?v=0.2.0';
 import { createTurbineAccident } from './wt-explosion.js?v=0.2.0';
 import { TURBINE_PARTS } from './wt-data.js?v=0.2.0';
 import { ROTOR, bladeRings, spinnerRadius } from './wt-rotor.js?v=0.2.0';
@@ -516,9 +517,13 @@ export function createWindTurbineModel() {
   nacelleGroup.add(cutTrimBottom);
 
   // Kühler-Lamellen auf dem Heck + Warnfeuer
-  const cooler = new THREE.Mesh(new THREE.BoxGeometry(1.55, 0.42, 1.25), mats.steelDark);
-  cooler.position.set(0, 1.58, -2.55);
-  nacelleGroup.add(cooler);
+  const cooler = new THREE.Mesh(new THREE.BoxGeometry(1.28, 0.12, 0.98), mats.steelDark);
+  cooler.position.set(0, 1.44, -2.55);
+  cooler.name = 'Dachkühler';
+  const fins = new THREE.InstancedMesh(new THREE.BoxGeometry(1.22, .14, .036), mats.gearSteel, 11);
+  const finMatrix = new THREE.Matrix4();
+  for (let i = 0; i < fins.count; i++) fins.setMatrixAt(i, finMatrix.makeTranslation(0, .12, (i - 5) * .084));
+  cooler.add(fins); nacelleGroup.add(cooler);
 
   const beaconPole = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.55, 10), mats.steelBright);
   beaconPole.position.set(-0.6, 1.68, -2.8);
@@ -589,12 +594,13 @@ export function createWindTurbineModel() {
 
   // Fundament-Sockel & Eingangstür
   const foundation = new THREE.Mesh(new THREE.CylinderGeometry(2.35, 2.75, 0.72, 32), mats.steelDark);
+  foundation.name = 'Turmfundament';
   foundation.position.y = -4.95;
   towerGroup.add(foundation);
 
   const accessGroup = registerPartGroup('serviceAccess', new THREE.Group());
   accessGroup.position.copy(towerGroup.position);
-  const updateAccess = createAccess(accessGroup, mats, registerXrayShell, shellCutawayMeshes);
+  const access = createAccess(accessGroup, mats, registerXrayShell, shellCutawayMeshes);
 
   // Animierte Strom-Impulse (fließen im Turm nach unten & zum Transformator!)
   const energyPulseGroup = new THREE.Group();
@@ -612,10 +618,16 @@ export function createWindTurbineModel() {
   // 12. TRANSFORMATOR & NETZEINSPEISUNG
   // =========================================================================
   const trafoGroup = registerPartGroup('transformer', new THREE.Group());
-  trafoGroup.position.set(2.55, -10.3, 0.25);
+  trafoGroup.position.set(3.80, -10.3, 0.25);
 
   const trafoBox = new THREE.Mesh(new THREE.BoxGeometry(1.75, 1.35, 1.45), mats.substation);
+  trafoBox.name = 'Trafogehäuse';
   trafoGroup.add(trafoBox);
+  const plinthHeight = trafoGroup.position.y - 0.675 - terrainHeight(trafoGroup.position.x, trafoGroup.position.z);
+  const plinth = new THREE.Mesh(new THREE.BoxGeometry(1.96, plinthHeight, 1.66), mats.steelDark);
+  plinth.name = 'Trafosockel';
+  plinth.position.y = -0.675 - plinthHeight / 2;
+  trafoGroup.add(plinth);
 
   // Kühlrippen am Transformator
   for (let i = -3; i <= 3; i++) {
@@ -630,9 +642,9 @@ export function createWindTurbineModel() {
     trafoGroup.add(iso);
   }
   // Verbindungskanal zum Turm & Netzkabel nach außen
-  const linkPipe = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.13, 1.6, 12), mats.steelDark);
+  const linkPipe = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.13, 2.2, 12), mats.steelDark);
   linkPipe.rotation.z = Math.PI / 2;
-  linkPipe.position.set(-1.35, -0.32, 0);
+  linkPipe.position.set(-1.60, -0.32, 0);
   trafoGroup.add(linkPipe);
 
   const gridOutPipe = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11, 2.2, 12), mats.cableCopper);
@@ -641,31 +653,14 @@ export function createWindTurbineModel() {
   trafoGroup.add(gridOutPipe);
 
   // =========================================================================
-  // STUDIOLANDSCHAFT / PODEST
-  // =========================================================================
-  const groundGroup = new THREE.Group();
-  const basePlate = new THREE.Mesh(
-    new THREE.CylinderGeometry(9.5, 9.8, 0.32, 64),
-    new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.78, metalness: 0.15 })
-  );
-  basePlate.position.y = -11.42;
-  basePlate.receiveShadow = true;
-  groundGroup.add(basePlate);
-
-  const ringAccent = new THREE.Mesh(
-    new THREE.RingGeometry(8.9, 9.12, 64),
-    new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.35, side: THREE.DoubleSide })
-  );
-  ringAccent.rotation.x = -Math.PI / 2;
-  ringAccent.position.y = -11.24;
-  groundGroup.add(ringAccent);
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(160, 160),
-    new THREE.MeshStandardMaterial({ roughness: 0.95, metalness: 0 }));
-  floor.rotation.x = -Math.PI / 2;
-  floor.position.y = -11.59;
-  floor.receiveShadow = true;
-  groundGroup.add(floor);
-  root.add(groundGroup);
+  // Zugang vom Grasniveau zum Fundament und zur Türschwelle.
+  for (let i = 0; i < 4; i++) {
+    const h = (i + 1) * 0.18;
+    const step = new THREE.Mesh(new THREE.BoxGeometry(0.70, h, 0.30), mats.gearSteel);
+    step.name = 'Eingangsstufe';
+    step.position.set(0, BASE_Y - towerGroup.position.y + h / 2, 3.36 - i * 0.29);
+    towerGroup.add(step);
+  }
 
   // Tag alle Baugruppen für Klick-Raycasting & Highlighting + Basispositionen sichern
   for (const [id, group] of partGroups.entries()) {
@@ -744,9 +739,6 @@ export function createWindTurbineModel() {
 
   function applyTheme(theme) {
     const isDark = theme === 'dark';
-    basePlate.material.color.setHex(isDark ? 0x162033 : 0xdbe3ee);
-    ringAccent.material.color.setHex(isDark ? 0x38bdf8 : 0x1e3a8a);
-    floor.material.color.setHex(isDark ? 0x171f2b : 0xd9e0e8);
     mats.xrayShell.color.setHex(isDark ? 0x808080 : 0x555555);
     xrayFocus.color.setHex(isDark ? 0xd4d4d4 : 0x989898);
     edgeMat.color.setHex(isDark ? 0xbcbcbc : 0x727272);
@@ -761,7 +753,7 @@ export function createWindTurbineModel() {
   const accident = createTurbineAccident({
     root, groups: partGroups, blades: bladePitchPivots, spinning: [rotorSpinGroup, bladesSpinGroup, mainShaftSpin],
     brake: brakeCaliper, shells: shellXrayRecords, hidden: [energyPulseGroup, cutTrimTop, cutTrimBottom],
-    floorY: basePlate.position.y + basePlate.geometry.parameters.height / 2, win: globalThis.window
+    win: globalThis.window
   });
   const trafoDelta = new THREE.Vector3();
   const flowPose = {};
@@ -837,7 +829,7 @@ export function createWindTurbineModel() {
     }
 
     updateInstruments(clampedDt, telemetry.windSpeed, state.time);
-    updateAccess(clampedDt, useXray || state.cutawayCurrent > 0.1, state.cutawayCurrent);
+    access.update(clampedDt, useXray || state.cutawayCurrent > 0.1, state.cutawayCurrent);
 
     // 7) Generator-Induktionsglühen & Bremsen-Status
     const loadRatio = telemetry.powerMW / 3.6;
@@ -902,6 +894,7 @@ export function createWindTurbineModel() {
   return {
     root,
     accident,
+    setAccessTour: access.setTour,
     setViewMode,
     setSelectedPart,
     setFlowVisible,

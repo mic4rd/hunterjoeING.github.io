@@ -6,7 +6,7 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https://upload.wikimedia.org; media-src 'self' data: blob:; connect-src 'self' https://hunterjoe-scores.hunterjoeing.workers.dev https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; object-src 'none'; base-uri 'self'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Windkraftanlage 3D – Interaktiver Explainer · HunterJoe Arcade</title>
-  <meta name="description" content="Interaktiver 3D-Explainer einer Windkraftanlage: Cutaway-Aufschnitt, X-Ray-Röntgenblick, 13 beschriftete Baugruppen, Windgeschwindigkeits-Regler, Live-Leistungskurve &amp; 7-Schritte-Tour." />
+  <meta name="description" content="Interaktiver 3D-Explainer einer Windkraftanlage: Cutaway-Aufschnitt, X-Ray-Röntgenblick, 13 beschriftete Baugruppen, Windgeschwindigkeits-Regler, Live-Leistungskurve &amp; 8-Schritte-Tour." />
   <meta name="robots" content="index, follow" />
   <meta name="theme-color" content="#F6F8FC" />
   <link rel="canonical" href="https://hunterjoeing.github.io/games/wind-turbine/" />
@@ -69,7 +69,7 @@
       <div class="wt-label-layer" id="wt-label-layer" aria-label="Bauteil-Beschriftungen"></div>
 
       <!-- 01 Cutaway · 02 X-Ray · 03 Explosionsansicht -->
-      <div class="wt-mode-dock" role="toolbar" aria-label="3D-Ansicht und Einstellungen">
+      <div class="wt-mode-dock" id="wt-mode-dock" role="toolbar" aria-label="3D-Ansicht und Einstellungen">
         <div class="wt-dock-group">
           <button type="button" class="wt-mode-btn active" data-view-mode="normal">Außenansicht</button>
           <button type="button" class="wt-mode-btn" data-view-mode="cutaway"><span class="wt-mode-num">01</span> Cutaway</button>
@@ -113,7 +113,7 @@
       <div class="wt-tour-card hidden" id="wt-tour-card" role="dialog" aria-label="Schritt-für-Schritt-Tour"></div>
 
       <div class="wt-bottom-bar">
-        <button type="button" class="wt-tour-launcher" id="wt-btn-tour">🧭 Tour in 7 Schritten</button>
+        <button type="button" class="wt-tour-launcher" id="wt-btn-tour">🧭 Tour in 8 Schritten</button>
         <button type="button" class="wt-mobile-toggle" id="wt-mobile-panel-toggle" aria-expanded="false">⚙️ Wind, Kurve &amp; Details</button>
         <div class="wt-orbit-hint">Ziehen: Drehen · Scroll/Pinch: Zoom · Klick: Bauteil prüfen</div>
       </div>

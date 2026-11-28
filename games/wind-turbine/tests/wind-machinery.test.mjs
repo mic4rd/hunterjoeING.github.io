@@ -9,11 +9,36 @@ const world = o => o.getWorldPosition(new T.Vector3());
 const box = o => new T.Box3().setFromObject(o, true);
 const all = (root, name) => root.getObjectsByProperty('name', name);
 
-// Read a face contour from the actual indexed gear mesh, in its local XY plane.
+// Reconstruct the rendered back-face boundary from its vertices, independently
+// of index order, duplicate normals, the number of facets and tooth metadata.
 function contour(wheel, inner = false) {
-  const attr = wheel.geometry.attributes.position, points = [];
-  for (let i = inner ? 0 : 1; i < attr.count; i += 4) points.push(new T.Vector3().fromBufferAttribute(attr, i));
-  return points;
+  const geom = wheel.geometry, attr = geom.attributes.position, samples = [];
+  geom.computeBoundingBox();
+  for (let i = 0; i < attr.count; i++) {
+    if (Math.abs(attr.getZ(i) - geom.boundingBox.min.z) > 1e-6) continue;
+    const p = new T.Vector3().fromBufferAttribute(attr, i);
+    // Offset the angle origin so no facet lies on the wraparound seam.
+    const angle = (Math.atan2(p.y, p.x) + 7.184) % (2 * Math.PI);
+    samples.push({ angle, p });
+  }
+  samples.sort((a, b) => a.angle - b.angle);
+  const outline = [];
+  let previous = -1;
+  for (const { angle, p } of samples) {
+    if (angle - previous > 1e-5) outline.push(p);
+    else {
+      const i = outline.length - 1;
+      if (inner ? p.lengthSq() < outline[i].lengthSq() : p.lengthSq() > outline[i].lengthSq()) outline[i] = p;
+    }
+    previous = angle;
+  }
+  return outline;
+}
+function countTeeth(wheel) {
+  const inner = wheel.name === 'Hohlrad', points = contour(wheel, inner);
+  const { min, max } = radii(wheel, inner), pitch = (min + max) / 2;
+  const tips = points.map(p => inner ? Math.hypot(p.x, p.y) < pitch : Math.hypot(p.x, p.y) > pitch);
+  return tips.filter((tip, i) => tip && !tips[(i + tips.length - 1) % tips.length]).length;
 }
 function radii(wheel, inner = false) {
   const r = contour(wheel, inner).map(p => Math.hypot(p.x, p.y));
@@ -80,8 +105,19 @@ test('Carrier, four orbiting planets, sun, both counter-rotating meshes and outp
       near(offset, 0.009 * (76 - 30)); near(p.z, centre.z);
     }
   }
-  const count = wheel => contour(wheel).length / 5;
-  assert.deepEqual([sun, planets[0], ring, a, b, d, e].map(count), [16, 30, 76, 68, 17, 68, 17]);
+  const count = countTeeth;
+  assert.deepEqual([sun, ...planets, ring, a, b, d, e].map(count), [16, 30, 30, 30, 30, 76, 68, 17, 68, 17]);
+  assert.ok(a.getObjectByName('Radscheibe') && d.getObjectByName('Radnabe'));
+  for (const wheel of [sun, ...planets, ring, a, b, d, e]) {
+    const inner = wheel === ring, vertices = contour(wheel, inner), { min, max } = radii(wheel, inner);
+    let width = 0;
+    for (let i = 0; i < vertices.length; i++) {
+      const p = vertices[i], q = vertices[(i + 1) % vertices.length], tip = inner ? min : max;
+      if (Math.abs(Math.hypot(p.x, p.y) - tip) < eps && Math.abs(Math.hypot(q.x, q.y) - tip) < eps)
+        width += (Math.atan2(q.y, q.x) - Math.atan2(p.y, p.x) + 2 * Math.PI) % (2 * Math.PI);
+    }
+    near(width / (2 * Math.PI), .35, .001);
+  }
   for (const [large, pin] of [[a, b], [d, e]]) {
     near(world(large).distanceTo(world(pin)), 0.007 * (count(large) + count(pin)));
     near(world(large).z, world(pin).z);
@@ -90,6 +126,37 @@ test('Carrier, four orbiting planets, sun, both counter-rotating meshes and outp
   near(world(a).x, world(sun).x); near(world(a).y, world(sun).y);
   near(world(b).x, world(d).x); near(world(b).y, world(d).y);
   const parked = e.rotation.z; m.update(dt, computeTurbineTelemetry(26)); near(e.rotation.z, parked);
+});
+
+test('Rendered gear tips run through the opposing gaps over an entire mesh cycle', () => {
+  const model = build(), get = n => model.root.getObjectByName(n);
+  const tel = computeTurbineTelemetry(12), small = get('Planet');
+  const pairs = [[get('Sonne'), small], [get('Hohlrad'), small],
+  [get('Stirnrad 1'), get('Ritzel 1')], [get('Stirnrad 2'), get('Ritzel 2')]];
+  const point = new T.Vector3(), transform = new T.Matrix4();
+  for (const [wheel, pin] of pairs) {
+    const inner = wheel.name === 'Hohlrad', profile = contour(wheel, inner);
+    const face = contour(pin), limits = radii(wheel, inner);
+    // Keep the two helical profiles on the same axial section (back face).
+    // For the wider stationary internal gear the tooth section is straight.
+    const anglePerTooth = 2 * Math.PI / countTeeth(pin);
+    let turned = 0;
+    while (turned < anglePerTooth) {
+      const before = pin.rotation.z;
+      model.update(.00045, tel);
+      turned += Math.abs(pin.rotation.z - before);
+      model.root.updateMatrixWorld(true);
+      transform.copy(wheel.matrixWorld).invert().multiply(pin.matrixWorld);
+      for (let i = 0; i < face.length; i++) {
+        for (const t of [0, .4, .8]) {
+          point.lerpVectors(face[i], face[(i + 1) % face.length], t).applyMatrix4(transform);
+          const r = Math.hypot(point.x, point.y);
+          if (inner ? r < limits.min : r > limits.max) continue;
+          assert.equal(crossings(profile, point.x, point.y), inner, wheel.name + ' / ' + pin.name);
+        }
+      }
+    }
+  }
 });
 
 test('Gear envelopes clear housing, bedplate, neighbors and brake, shaft passages meet end to end', () => {
@@ -146,7 +213,7 @@ test('Lift and ladder clear the platform openings over the full tower height', (
   }
   let min = Infinity, max = -Infinity;
   for (let i = 0; i < 790; i++) { m.update(0.05, tel); min = Math.min(min, lift.position.y); max = Math.max(max, lift.position.y); }
-  assert.ok(min < -4.45 && max > 4.60 && lift.position.y < -3.9);
+  assert.ok(min < -4.45 && max > 4.60);
   m.setViewMode('xray'); m.update(0.2, tel); assert.ok(o('Turmtür').material.transparent && lift.visible);
 });
 

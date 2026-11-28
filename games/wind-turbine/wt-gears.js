@@ -19,12 +19,15 @@ function node(parent, name, geometry, mat, x, y, z) {
 // The internal gear carries teeth on the inside of the stationary housing.
 function wheelGeometry(teeth, module, depth, rim, internal, helix) {
   const r = pitch(teeth, module), positions = [], indices = [];
-  const offsets = [-0.5, -0.36, -0.14, 0.14, 0.36];
+  // The small azimuth pinions need deeper root clearance at their fixed mesh phase.
+  const yaw = module === YAW.module;
+  const offsets = yaw ? [-0.5, -0.36, -0.14, 0.14, 0.36] : [-0.5, -0.32, -0.175, 0.175, 0.32];
+  const addendum = yaw ? 0.72 : 0.70, dedendum = yaw ? 1.12 : 1.10;
   const n = teeth * offsets.length;
   for (let i = 0; i < n; i++) {
     const k = i % offsets.length, tooth = Math.floor(i / offsets.length);
     const tip = k === 2 || k === 3;
-    const toothR = r + (internal ? -1 : 1) * module * (tip ? 0.72 : -1.12);
+    const toothR = r + (internal ? -1 : 1) * module * (tip ? addendum : -dedendum);
     for (let face = 0; face < 2; face++) {
       const z = (face - 0.5) * depth;
       const a = (tooth + offsets[k]) * TAU / teeth + z * helix / r;
@@ -37,7 +40,13 @@ function wheelGeometry(teeth, module, depth, rim, internal, helix) {
   for (let i = 0; i < n; i++) {
     const a = 4 * i, b = 4 * ((i + 1) % n);
     quad(a, b, b + 1, a + 1); quad(a + 2, a + 3, b + 3, b + 2);
-    quad(a + 1, b + 1, b + 3, a + 3); quad(a, a + 2, b + 2, b);
+    // Separate face and flank vertices. Averaging these normals across the
+    // entire disk turns even a flat steel face into radial specular streaks.
+    for (const side of [[a + 1, b + 1, b + 3, a + 3], [a, a + 2, b + 2, b]]) {
+      const first = positions.length / 3;
+      for (const v of side) positions.push(positions[3 * v], positions[3 * v + 1], positions[3 * v + 2]);
+      quad(first, first + 1, first + 2, first + 3);
+    }
   }
   const g = new T.BufferGeometry();
   g.setAttribute('position', new T.Float32BufferAttribute(positions, 3));
@@ -46,7 +55,28 @@ function wheelGeometry(teeth, module, depth, rim, internal, helix) {
 }
 
 function wheel(parent, name, teeth, module, depth, rim, mat, x, y, z, internal = false, helix = 0) {
-  return node(parent, name, wheelGeometry(teeth, module, depth, rim, internal, helix), mat, x, y, z);
+  const radius = pitch(teeth, module);
+  const web = !internal && (teeth === SPUR.wheel || name === 'Planet');
+  const inner = web ? radius * 0.70 : rim;
+  const gear = node(parent, name, wheelGeometry(teeth, module, depth, inner, internal, helix), mat, x, y, z);
+  if (web) {
+    const shape = new T.Shape();
+    shape.absarc(0, 0, inner, 0, TAU, false);
+    const hub = Math.max(rim * 1.35, radius * .28);
+    const hole = (x, y, r) => {
+      const path = new T.Path(); path.absarc(x, y, r, 0, TAU, true); shape.holes.push(path);
+    };
+    hole(0, 0, hub);
+    for (let i = 0; i < 5; i++) {
+      const a = i * TAU / 5;
+      hole(radius * .49 * Math.cos(a), radius * .49 * Math.sin(a), radius * .12);
+    }
+    const plate = new T.ExtrudeGeometry(shape, { depth: depth * .54, bevelEnabled: false, curveSegments: 16 });
+    plate.translate(0, 0, -depth * .27);
+    node(gear, 'Radscheibe', plate, mat, 0, 0, 0);
+    node(gear, 'Radnabe', sleeve(hub, rim, depth), mat, 0, 0, 0);
+  }
+  return gear;
 }
 
 // Machined bores remain open through the brake, coupling and bearing.
@@ -89,10 +119,10 @@ export function createGearbox(group, mats, registerShell, cutCovers) {
   const a = SPUR, distance = pitch(a.wheel + a.pinion, a.module), axis = 0.62;
   const x = distance * Math.cos(axis), y = distance * Math.sin(axis);
   const z1 = -0.055, z2 = -0.535;
-  const first = wheel(group, 'Stirnrad 1', a.wheel, a.module, 0.18, 0.050, mats.gearSteel, 0, 0, z1, false, 0.16);
-  const pin1 = wheel(group, 'Ritzel 1', a.pinion, a.module, 0.18, 0.042, mats.steelBright, x, y, z1, false, -0.16);
-  const second = wheel(group, 'Stirnrad 2', a.wheel, a.module, 0.18, 0.042, mats.gearGold, x, y, z2, false, -0.16);
-  const pin2 = wheel(group, 'Ritzel 2', a.pinion, a.module, 0.18, 0.068, mats.steelBright, 0, 0, z2, false, 0.16);
+  const first = wheel(group, 'Stirnrad 1', a.wheel, a.module, 0.115, 0.050, mats.gearSteel, 0, 0, z1, false, 0.105);
+  const pin1 = wheel(group, 'Ritzel 1', a.pinion, a.module, 0.115, 0.042, mats.steelBright, x, y, z1, false, -0.105);
+  const second = wheel(group, 'Stirnrad 2', a.wheel, a.module, 0.115, 0.042, mats.gearGold, x, y, z2, false, -0.105);
+  const pin2 = wheel(group, 'Ritzel 2', a.pinion, a.module, 0.115, 0.068, mats.steelBright, 0, 0, z2, false, 0.105);
   shaft(group, 'Sonnenwelle', 0.049, 0, 0, planetZ + 0.09, z1 - 0.09, mats.steelBright);
   shaft(group, 'Zwischenwelle', 0.041, x, y, z1 + 0.095, z2 - 0.095, mats.steelBright);
   shaft(group, 'Abtriebszapfen', 0.067, 0, 0, z2 + 0.09, -0.755, mats.steelBright);
