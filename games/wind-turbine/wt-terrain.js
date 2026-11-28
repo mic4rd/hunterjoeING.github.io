@@ -7,10 +7,22 @@ const smooth = t => t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t);
 for (let j = 0; j <= cells; j++) {
   for (let i = 0; i <= cells; i++) {
     const x = GRID * i - LAND_SIZE / 2, z = GRID * j - LAND_SIZE / 2;
-    const hill = smooth((Math.hypot(x, z) - 9) / 26);
-    const shore = smooth((-0.83 * x - 0.56 * z + 3 * Math.sin(z / 16) - 9) / 24);
-    const meadow = 1.65 + 0.72 * Math.sin(x / 14) * Math.cos(z / 13);
-    heights[j * stride + i] = BASE_Y - hill * meadow - 7.5 * shore;
+    // A low, asymmetric headland extends inland behind the camera. Its outer
+    // mesh boundary lies below sea level, including when orbiting the coast.
+    const inland = .82 * x + .57 * z;
+    const lateral = -.57 * x + .82 * z;
+    const apron = Math.hypot(Math.max(-4 - x, 0, x - 8), Math.max(0, Math.abs(z) - 4));
+    const hill = smooth(apron / 21);
+    const cove = 3.7 * Math.sin(inland / 9) + 2.3 * Math.sin(lateral / 8);
+    const crossShore = Math.hypot(Math.max(-inland * 1.22, inland * .44), lateral - cove);
+    const shore = smooth((crossShore - 17) / 18);
+    const meadow = 3.25 + .78 * Math.sin(lateral / 9 + .3) * Math.cos(inland / 14);
+    // A low spur curves out of the left flank. Its sandy, seaward edge can
+    // be seen beyond the crest even from the low exterior camera.
+    const ridge = 25 + 7 * Math.sin(inland / 13);
+    const spur = Math.hypot((inland + 25) / 40, (lateral - ridge) / 18);
+    const dune = SEA_Y + 1.95 - 5.8 * smooth(spur);
+    heights[j * stride + i] = Math.max(BASE_Y - hill * meadow - 6.2 * shore, dune);
   }
 }
 
@@ -26,19 +38,23 @@ export function terrainHeight(x, z) {
 
 // Conservative terrain support for a tumbling assembly. The extrema of a
 // clipped height-field triangle occur at corners or intersections of its edges.
-export function highestGround(x0, z0, x1, z1) {
-  let top = Math.max(terrainHeight(x0, z0), terrainHeight(x0, z1), terrainHeight(x1, z0), terrainHeight(x1, z1));
+function abovePlane(x, z, slopeX, slopeZ) {
+  return terrainHeight(x, z) - slopeX * x - slopeZ * z;
+}
+
+export function highestGround(x0, z0, x1, z1, slopeX = 0, slopeZ = 0) {
+  let top = Math.max(abovePlane(x0, z0, slopeX, slopeZ), abovePlane(x0, z1, slopeX, slopeZ), abovePlane(x1, z0, slopeX, slopeZ), abovePlane(x1, z1, slopeX, slopeZ));
   for (let x = Math.ceil(x0 / GRID) * GRID; x <= x1; x += GRID) {
-    top = Math.max(top, terrainHeight(x, z0), terrainHeight(x, z1));
-    for (let z = Math.ceil(z0 / GRID) * GRID; z <= z1; z += GRID) top = Math.max(top, terrainHeight(x, z));
+    top = Math.max(top, abovePlane(x, z0, slopeX, slopeZ), abovePlane(x, z1, slopeX, slopeZ));
+    for (let z = Math.ceil(z0 / GRID) * GRID; z <= z1; z += GRID) top = Math.max(top, abovePlane(x, z, slopeX, slopeZ));
   }
   for (let z = Math.ceil(z0 / GRID) * GRID; z <= z1; z += GRID)
-    top = Math.max(top, terrainHeight(x0, z), terrainHeight(x1, z));
+    top = Math.max(top, abovePlane(x0, z, slopeX, slopeZ), abovePlane(x1, z, slopeX, slopeZ));
   for (let d = Math.ceil((x0 + z0) / GRID) * GRID; d <= x1 + z1; d += GRID) {
-    if (d - z0 >= x0 && d - z0 <= x1) top = Math.max(top, terrainHeight(d - z0, z0));
-    if (d - z1 >= x0 && d - z1 <= x1) top = Math.max(top, terrainHeight(d - z1, z1));
-    if (d - x0 >= z0 && d - x0 <= z1) top = Math.max(top, terrainHeight(x0, d - x0));
-    if (d - x1 >= z0 && d - x1 <= z1) top = Math.max(top, terrainHeight(x1, d - x1));
+    if (d - z0 >= x0 && d - z0 <= x1) top = Math.max(top, abovePlane(d - z0, z0, slopeX, slopeZ));
+    if (d - z1 >= x0 && d - z1 <= x1) top = Math.max(top, abovePlane(d - z1, z1, slopeX, slopeZ));
+    if (d - x0 >= z0 && d - x0 <= z1) top = Math.max(top, abovePlane(x0, d - x0, slopeX, slopeZ));
+    if (d - x1 >= z0 && d - x1 <= z1) top = Math.max(top, abovePlane(x1, d - x1, slopeX, slopeZ));
   }
   return top;
 }

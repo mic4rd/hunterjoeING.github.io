@@ -158,13 +158,21 @@ export function createTurbineAccident({ root, groups, blades, spinning, brake, s
     if (penetration >= 0 && b.strips) {
       penetration = -Infinity;
       for (const strip of b.strips) {
+        // Measure both supports relative to the local slope. This also gives
+        // a conservative bound across creases between height-field triangles.
+        point.copy(strip[0]).sub(b.centre).applyMatrix4(matrix).add(b.pos);
+        const h = terrainHeight(point.x, point.z);
+        const slopeX = (terrainHeight(point.x + .02, point.z) - h) / .02;
+        const slopeZ = (terrainHeight(point.x, point.z + .02) - h) / .02;
         box.makeEmpty();
+        let lowest = Infinity;
         for (const vertex of strip) {
           point.copy(vertex).sub(b.centre).applyMatrix4(matrix).add(b.pos);
           box.expandByPoint(point);
+          lowest = Math.min(lowest, point.y - slopeX * point.x - slopeZ * point.z);
         }
-        const surface = highestGround(box.min.x, box.min.z, box.max.x, box.max.z);
-        penetration = Math.max(penetration, surface - box.min.y);
+        const surface = highestGround(box.min.x, box.min.z, box.max.x, box.max.z, slopeX, slopeZ);
+        penetration = Math.max(penetration, surface - lowest);
       }
     }
     if (penetration >= 0) {

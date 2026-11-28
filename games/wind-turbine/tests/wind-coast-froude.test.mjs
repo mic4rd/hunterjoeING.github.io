@@ -10,7 +10,8 @@ import { terrainHeight, BASE_Y, SEA_Y } from '../wt-terrain.js?v=0.2.0';
 import { weatherAt, settle } from '../wt-weather.js?v=0.2.0';
 
 const T = await import('three');
-const { createMeasurements, frameTourContent } = await import('../wt-measurements.js?v=0.2.0');
+const { createMeasurements } = await import('../wt-measurements.js?v=0.2.0');
+const { frameTourContent, fitOverview, COAST_VIEW } = await import('../wt-camera.js?v=0.2.0');
 const { createLandscape, createTerrainGeometry } = await import('../wt-landscape.js?v=0.2.0');
 const { createWindParticles } = await import('../wt-wind-particles.js?v=0.2.0');
 const near = (x, y, eps = 1e-8) => assert.ok(Math.abs(x - y) < eps, `${x} vs ${y}`);
@@ -48,16 +49,28 @@ test('Measurement rings follow the same sections on activation and remain in the
       near(ring.position.z, ROTOR.z - xi * RADIUS);
       near(ring.scale.x, sampleSection({}, xi * RADIUS, a).tube);
       assert.ok(badge.isSprite && m.group.visible && ring.material.transparent);
-      for (const [w, h, top, bottom] of [[912, 740, 60, 363], [390, 778, 94, 350]]) {
+      for (const [w, h, top, bottom] of [[912, 740, 60, 448], [912, 740, 60, 330], [390, 778, 94, 452], [390, 778, 94, 350]]) {
         const camera = new T.PerspectiveCamera(42, w / h, .1, 320), target = new T.Vector3(...step.cameraTarget);
         camera.position.set(...step.cameraPos);
         frameTourContent(camera, w, h, top, bottom);
-        camera.position.sub(target).multiplyScalar(Math.max(1, 1.12 * camera.zoom / camera.aspect)).add(target);
+        fitOverview(camera.position, target, camera, 'rings');
         camera.lookAt(target); camera.updateMatrixWorld(); ring.updateMatrixWorld();
+        let projectedTop = Infinity, projectedBottom = -Infinity;
         for (let i = 0; i < ring.geometry.attributes.position.count; i++) {
           const p = new T.Vector3().fromBufferAttribute(ring.geometry.attributes.position, i).applyMatrix4(ring.matrixWorld).project(camera);
-          assert.ok(Math.abs(p.x) < 1 && (1 - p.y) * h / 2 > top && (1 - p.y) * h / 2 < bottom);
+          const y = (1 - p.y) * h / 2;
+          projectedTop = Math.min(projectedTop, y); projectedBottom = Math.max(projectedBottom, y);
+          assert.ok(Math.abs(p.x) < 1 && y > top && y < bottom);
         }
+        const centre = badge.position.clone().project(camera);
+        const px = (centre.x + 1) * w / 2, py = (1 - centre.y) * h / 2;
+        assert.ok(px > 18 && px < w - 18 && py - 10 > top && py + 10 < bottom);
+        if (j > 0) {
+          const previous = m.group.children[j * 2 - 1].position.clone().project(camera);
+          assert.ok(Math.abs(centre.x - previous.x) * w / 2 > 36, 'neighbouring labels overlap');
+        }
+        const pixels = projectedBottom - projectedTop;
+        if (j === 1) assert.ok(pixels > Math.min((bottom - top) * .59, w * .45), 'projected rotor ring ' + pixels);
         m.resizeLabels(h, camera);
         near(badge.scale.y * h * camera.projectionMatrix.elements[5] / 2, 20);
       }
@@ -177,4 +190,87 @@ test('The access tour frames the lower demonstration trip, door and ladder and r
     assert.ok(hits >= 5, 'visible structural members ' + hits);
   }
   assert.ok(find('Türgitter') && find('Dachkühler').children[0].count === 11);
+});
+
+test('Exterior and wind station frame the drawn turbine above the controls across a full rotor turn', () => {
+  const model = build(), tel = computeTurbineTelemetry(12);
+  const solids = model.root.getObjectsByProperty('isMesh', true).filter(part =>
+    part.name === 'Turmfundament' || part.userData.partId === 'blades' && part.geometry.type === 'BufferGeometry');
+  const vertex = new T.Vector3(), view = TURBINE_TOUR_STEPS[0];
+  for (const [w, h, top] of [[912, 740, 60], [390, 778, 96]]) {
+    for (const shot of ['outside', 'wind']) {
+      const tour = shot === 'wind', bottom = tour ? h - 283 : h - 58;
+      const camera = new T.PerspectiveCamera(42, w / h, .1, 320);
+      const target = new T.Vector3(...(tour ? view.cameraTarget : COAST_VIEW.target));
+      camera.position.fromArray(tour ? view.cameraPos : COAST_VIEW.pos);
+      frameTourContent(camera, w, h, top, bottom);
+      fitOverview(camera.position, target, camera, shot);
+      camera.lookAt(target); camera.updateMatrixWorld();
+      const levels = [];
+      for (let frame = 0; frame < 90; frame++) {
+        model.update(.05, tel); model.root.updateMatrixWorld(true);
+        let low = Infinity, high = -Infinity;
+        for (const obj of solids) {
+          const attr = obj.geometry.attributes.position;
+          for (let i = 0; i < attr.count; i++) {
+            vertex.fromBufferAttribute(attr, i).applyMatrix4(obj.matrixWorld).project(camera);
+            const y = (1 - vertex.y) * h / 2;
+            assert.ok(Math.abs(vertex.x) < 1 && y >= top - 2 && y < bottom, 'blade or foundation outside the stage');
+            low = Math.min(low, y); high = Math.max(high, y);
+          }
+        }
+        levels.push((high - low) / (tour ? bottom - top : h));
+      }
+      levels.sort((a, b) => a - b);
+      assert.ok(levels.at(-1) >= .70 && levels[45] >= (tour ? .76 : .70));
+      assert.ok(levels[45] < (tour ? .94 : .81));
+      const horizon = camera.position.clone().sub(target); horizon.y = 0;
+      horizon.normalize().multiplyScalar(-1e6).add(camera.position).project(camera);
+      if (!tour) assert.ok((1 - horizon.y) / 2 > .58 && (1 - horizon.y) / 2 < .71);
+    }
+  }
+});
+
+test('A green crest and a sandy seaward slope are visible from the exterior camera with the grid edges submerged', () => {
+  const h = 740, w = 912, camera = new T.PerspectiveCamera(42, w / h, .1, 320);
+  const target = new T.Vector3(...COAST_VIEW.target);
+  camera.position.fromArray(COAST_VIEW.pos);
+  frameTourContent(camera, w, h, 60, 682); fitOverview(camera.position, target, camera, 'outside');
+  camera.lookAt(target); camera.updateMatrixWorld();
+  const hill = new T.Mesh(createTerrainGeometry(true)), ray = new T.Raycaster();
+  const p = new T.Vector2();
+  let beach = 0, grass = 0, sea = 0;
+  for (let row = 0; row < 14; row++) for (let col = 0; col < 28; col++) {
+    p.set((col + .5) / 14 - 1, -.36 - row * .045);
+    ray.setFromCamera(p, camera);
+    const hit = ray.intersectObject(hill)[0]?.point;
+    if (!hit || hit.y < SEA_Y) sea++;
+    else if (hit.y < SEA_Y + 1.05) beach++;
+    else grass++;
+  }
+  assert.ok(beach >= 3 && grass >= 45 && sea >= 40, 'visible coast samples ' + [beach, grass, sea]);
+  const extent = hill.geometry.parameters.width / 2;
+  for (let k = -extent; k <= extent; k += 2) for (const edge of [-extent, extent]) {
+    assert.ok(terrainHeight(edge, k) < SEA_Y - 1 && terrainHeight(k, edge) < SEA_Y - 1);
+  }
+});
+
+test('Calm and overcast use distinguishable sky and haze colours in both themes', () => {
+  const coast = createLandscape(new T.Scene(), { key: new T.DirectionalLight(), fill: new T.HemisphereLight() }, false);
+  const [land, water] = coast.group.children, u = water.material.uniforms;
+  for (const dark of [false, true]) {
+    coast.setTheme(dark);
+    const colors = [];
+    for (const speed of [4, 12, 25]) {
+      for (let i = 0; i < 240; i++) coast.update(1 / 30, speed, false);
+      colors.push([u.uSky.value.clone().convertLinearToSRGB(), u.uHaze.value.clone().convertLinearToSRGB()]);
+      const turf = land.material.color;
+      assert.ok(turf.g > turf.r * 1.9 && turf.g > turf.b * 1.6);
+    }
+    for (let j = 0; j < 2; j++) {
+      const [calm, overcast, storm] = colors.map(pair => pair[j]);
+      assert.ok(calm.b - calm.r > overcast.b - overcast.r + .12);
+      assert.ok(calm.b > overcast.b + .08 && overcast.b > storm.b + .065);
+    }
+  }
 });

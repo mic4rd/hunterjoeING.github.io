@@ -9,7 +9,7 @@ import { froudePanel, updateFroudePanel } from '../wt-froude-panel.js?v=0.2.0';
 import * as data from '../wt-data.js?v=0.2.0';
 import { createAccidentControls } from '../wt-accident-controls.js?v=0.2.0';
 const T = await import('three');
-const { frameTourContent } = await import('../wt-measurements.js?v=0.2.0');
+const { frameTourContent, fitOverview, COAST_VIEW } = await import('../wt-camera.js?v=0.2.0');
 
 function record(root) {
   const result = new Map();
@@ -107,7 +107,7 @@ test('Banner, picking lock, repair button and automatic repair share one state a
   function element(id, dataset = {}) {
     const events = new Map(), classes = new Set();
     const node = {
-      id, dataset, style: {}, children: [], clientWidth: 912, clientHeight: 740, offsetHeight: 40, offsetTop: id === 'wt-tour-card' ? 420 : 12,
+      id, dataset, style: {}, children: [], clientWidth: 912, clientHeight: 740, offsetHeight: 40, offsetTop: id === 'wt-tour-card' ? 420 : id === 'wt-bottom-bar' ? 693 : 12,
       classList: { toggle(k,on) { if (on) classes.add(k); else classes.delete(k); }, add(k) { classes.add(k); },
         remove(k) { classes.delete(k); }, contains(k) { return classes.has(k); } },
       setAttribute(k,v) { this[k] = v; }, appendChild(e) { this.children.push(e); }, querySelectorAll() { return []; },
@@ -120,19 +120,26 @@ test('Banner, picking lock, repair button and automatic repair share one state a
     items.set(id,node); return node;
   }
   for (const [,id] of html.matchAll(/ id="([^"]+)"/g)) element(id);
+  const bottomBar = element('wt-bottom-bar');
+  items.get('wt-viewport').querySelector = selector => selector === '.wt-bottom-bar' ? bottomBar : null;
   for (const [,mode] of html.matchAll(/data-view-mode="([^"]+)"/g)) modes.push(element(mode,{ viewMode:mode }));
   const doc = { getElementById: id => items.get(id), createElement: () => element('pin'),
     querySelectorAll: sel => sel === '[data-view-mode]' ? modes : [] };
-  let frame, now = 0, picks = 0, measuring = false;
-  class Controls { target = new T.Vector3(); update() {} addEventListener() {} }
+  let frame, eye, now = 0, picks = 0, measuring = false;
+  class Controls { constructor(camera) { eye = camera; } target = new T.Vector3(); update() { } addEventListener() { } }
   class Ray extends T.Raycaster { setFromCamera() { picks++; } }
   const source = readFileSync(new URL('../wt-main.js',import.meta.url),'utf8').replace(/^import [\s\S]*?;\n/gm,'');
   runInNewContext(source, { document:doc, window:element('window'), THREE:{...T, Raycaster:Ray}, ...data,
-    froudePanel, updateFroudePanel, frameTourContent, createAccidentControls, OrbitControls: Controls, ResizeObserver: class { observe() { } },
+    froudePanel, updateFroudePanel, frameTourContent, fitOverview, COAST_VIEW, createAccidentControls, OrbitControls: Controls, ResizeObserver: class { observe() { } },
     createWindTurbineModel:() => model, createWindParticles:() => ({resize(){},update(){}}),
     createStudio: () => ({ resize() { }, resizeLabels() { }, render() { }, updateWeather() { }, setMeasurements(active) { measuring = active; } }), createGraphicsSettings: () => ({ frame() { }, close() { } }),
     performance:{ now:() => now }, requestAnimationFrame:cb => { frame = cb; } });
   const by = id => items.get(id), click = id => by(id).emit('click');
+  // Reset uses the same framing as first load after a user moves the camera.
+  const initialEye = eye.position.clone(), initialProjection = eye.projectionMatrix.clone();
+  eye.position.set(82, 26, 67); click('wt-btn-reset');
+  for (let i = 0; i < 55; i++) frame(now += 20);
+  assert.ok(eye.position.distanceTo(initialEye) < 1e-8 && eye.projectionMatrix.equals(initialProjection));
   function start() {
     click('exploded');
     assert.equal(model.accident.state.phase,'overrev');
@@ -156,9 +163,16 @@ test('Banner, picking lock, repair button and automatic repair share one state a
   click('wt-tour-next'); assert.equal(measuring, true);
   by('wt-wind-slider').value = '20'; by('wt-wind-slider').emit('input');
   assert.equal(by('wt-fr-slider').value, '20');
-  assert.match(by('wt-fr-values').innerHTML, /3,60 MW/);
+  const live = by('wt-fr-live').innerHTML;
+  for (const value of ['20,0 m/s', '18,6 m/s', '17,1 m/s', '61,10 MW', '36,21 MW', '3,60 MW', '9,9 %', '5,9 %'])
+    assert.ok(live.includes(value), value);
   by('wt-fr-slider').value = '26'; by('wt-fr-slider').emit('input');
   assert.match(by('wt-fr-values').innerHTML, /Sturmabschaltung/);
+  assert.match(by('wt-fr-live').innerHTML, /0,00 MW/);
+  // The live region is outside the closed disclosure and its scroll container.
+  assert.ok(froudePanel.indexOf('id="wt-fr-slider"') < froudePanel.indexOf('id="wt-fr-live"'));
+  assert.ok(froudePanel.indexOf('id="wt-fr-live"') < froudePanel.indexOf('<details'));
+  assert.match(froudePanel, /<details class="wt-froude-details">[\s\S]*wt-froude-scroll[\s\S]*id="wt-fr-values"/);
   click('wt-tour-next'); assert.equal(measuring, false);
   click('wt-tour-prev'); assert.equal(measuring, true);
   click('wt-tour-end'); assert.equal(measuring, false);

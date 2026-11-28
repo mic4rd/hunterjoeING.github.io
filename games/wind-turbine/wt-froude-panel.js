@@ -10,11 +10,15 @@ const statusText = {
   cutout: 'Bei Sturmabschaltung stehen die Blätter in Fahnenstellung. Die elektrische Leistung ist null.'
 };
 export const froudePanel = `
-  <div class="wt-froude-scroll" tabindex="0" aria-label="Live-Rechnung und Herleitung">
-    <label class="wt-froude-wind" for="wt-fr-slider">Anströmung v₁ <output id="wt-fr-wind" for="wt-fr-slider"></output>
-      <input id="wt-fr-slider" type="range" min="0" max="${TURBINE_SPECS.maxWindSpeed}" step="0.5" aria-label="Anströmung in Metern pro Sekunde">
-    </label>
-    <details><summary>Herleitung und Rotorauslegung</summary>
+  <label class="wt-froude-wind" for="wt-fr-slider">Wind v₁
+    <input id="wt-fr-slider" type="range" min="0" max="${TURBINE_SPECS.maxWindSpeed}" step="0.5" aria-label="Anströmung in Metern pro Sekunde">
+    <output id="wt-fr-wind" for="wt-fr-slider"></output>
+  </label>
+  <div id="wt-fr-live" class="wt-fr-live" aria-label="Aktuelle Modellwerte"></div>
+  <details class="wt-froude-details">
+    <summary>Modellvergleich, Herleitung und Auslegung</summary>
+    <div class="wt-froude-scroll" tabindex="0" aria-label="Modellvergleich und Herleitung">
+      <div id="wt-fr-values"></div>
       <ol class="wt-froude-equations">
         <li>Massenstrom durch die Rotorscheibe<br>ṁ = ρ · A · v<sub>R</sub></li>
         <li>Schub aus dem Impulsverlust<br>F = ṁ · (v₁ − v₃)</li>
@@ -23,9 +27,8 @@ export const froudePanel = `
         <li>Am Optimum gilt v<sub>R</sub> = ⅔ v₁, v₃ = ⅓ v₁ und c<sub>P,max</sub> = 16/27 ≈ 59,3 %.</li>
       </ol>
       <p>Für eine gewünschte Leistung P bei gegebenem Wind ergibt sich die ideale Mindestfläche A = 2P/(ρ · v₁³ · c<sub>P,max</sub>). Reale Verluste erhöhen den Flächenbedarf.</p>
-    </details>
-    <div id="wt-fr-values"></div>
-  </div>`;
+    </div>
+  </details>`;
 
 export function updateFroudePanel(doc, telemetry) {
   const values = doc.getElementById('wt-fr-values');
@@ -33,6 +36,17 @@ export function updateFroudePanel(doc, telemetry) {
   const v = froudeValues(telemetry), slider = doc.getElementById('wt-fr-slider');
   slider.value = String(v.v1);
   doc.getElementById('wt-fr-wind').textContent = num(v.v1) + ' m/s';
+  const share = v.share === null ? '– (Windstille)' : num(100 * v.share) + ' %';
+  doc.getElementById('wt-fr-live').innerHTML = `
+    <dl>
+      <div><dt>Anströmung v₁</dt><dd>${num(v.v1)} m/s</dd></div>
+      <div><dt>Rotor v<sub>R</sub></dt><dd>${num(v.vR)} m/s</dd></div>
+      <div><dt>Nachlauf v₃</dt><dd>${num(v.v3)} m/s</dd></div>
+      <div><dt>Windleistung</dt><dd>${power(v.windMW)} MW</dd></div>
+      <div><dt>Betz-Grenze</dt><dd>${power(v.betzMW)} MW</dd></div>
+      <div><dt>Elektrisch</dt><dd>${power(v.electricMW)} MW</dd></div>
+    </dl>
+    <p>Anteil an Betz <b>${share}</b> · c<sub>P,el</sub> <b>${num(100 * v.cp)} %</b></p>`;
   values.innerHTML = `
     <table><thead><tr><th>Geschwindigkeit</th><th>Modell</th><th>Betz-Optimum</th></tr></thead>
     <tbody><tr><th>Rotor v<sub>R</sub></th><td>${num(v.vR)} m/s</td><td>${num(v.idealRotor)} m/s</td></tr>
@@ -40,10 +54,6 @@ export function updateFroudePanel(doc, telemetry) {
     <p>${v.v1 ? 'Induktion a = 1 − v<sub>R</sub>/v₁ = <b>' + precise(v.a) + '</b> im Modell, ⅓ am Optimum.' : 'Bei Windstille ruht die Strömung. Das Modell setzt a = 0.'}</p>
     <p>Im Modell gilt v<sub>R</sub> = (1 − a)v₁ und v₃ = (1 − 2a)v₁. Die äußeren Ringe markieren die Fernwerte schematisch.</p>
     <p>A = π · (${whole(TURBINE_SPECS.rotorDiameterM)} m / 2)² ≈ ${whole(v.area)} m²<br>ρ = ${precise(v.rho)} kg/m³</p>
-    <dl><dt>Windleistung ½ρAv₁³</dt><dd>${power(v.windMW)} MW</dd>
-    <dt>Betz-Grenze · 16/27 davon</dt><dd>${power(v.betzMW)} MW</dd>
-    <dt>Elektrische Modellleistung</dt><dd>${power(v.electricMW)} MW</dd>
-    <dt>c<sub>P,el</sub> · Anteil der Windleistung</dt><dd>${num(100 * v.cp)} %</dd>
-    <dt>Anteil der Betz-Leistung</dt><dd>${v.share === null ? '– (Windstille)' : num(100 * v.share) + ' %'}</dd></dl>
+    <p>P<sub>Wind</sub> = ½ρAv₁³<br>P<sub>Betz</sub> = 16/27 · P<sub>Wind</sub></p>
     <p>${statusText[telemetry.status]}</p>`;
 }

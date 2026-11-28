@@ -273,8 +273,8 @@ export const TURBINE_TOUR_STEPS = [
     viewMode: 'normal',
     focusPart: 'blades',
     demoWind: 10.5,
-    cameraPos: [32, 5.5, 14],
-    cameraTarget: [0, 0.9, 3.4],
+    cameraPos: [32, -4.2, 17],
+    cameraTarget: [0, -1.1, 2.4],
     body:
       'Die blauen Kugeln füllen den anströmenden Luftquerschnitt. Vor dem Rotor bremst die Luft ab. Dahinter weitet sich der Luftstrom und dreht sich leicht entgegen dem Rotor. Nach Betz kann ein idealer Rotor höchstens 59,3 % der Windleistung nutzen.'
   },
@@ -282,8 +282,9 @@ export const TURBINE_TOUR_STEPS = [
     step: 2,
     title: 'Froude-Rankine & Betz-Grenze', badge: 'Strahltheorie',
     lesson: 'froude', viewMode: 'normal', focusPart: 'blades',
-    cameraPos: [47, 5, 17], cameraTarget: [0, 0.5, 2.8],
-    body: 'In der idealen Stromröhre ist das Tempo am Rotor der Mittelwert aus Anströmung und fernem Nachlauf: v<sub>R</sub> = (v₁ + v₃)/2.'
+    cameraPos: [42, -2.6, 14], cameraTarget: [0, -0.4, 2.8],
+    portraitPos: [18.3, -3.0, 41.85], portraitTarget: [0, -0.4, 8],
+    body: 'Am idealen Rotor gilt das Mittel aus Anströmung und fernem Nachlauf: v<sub>R</sub> = (v₁ + v₃)/2.'
   },
   {
     step: 3,

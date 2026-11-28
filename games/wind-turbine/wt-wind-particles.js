@@ -33,8 +33,8 @@ export function createWindParticles(win) {
     mesh.setColorAt(i, color);
   }
   function applyTheme(dark) {
-    slow.setHex(dark ? 0x204ee6 : 0x102bbb);
-    fast.setHex(dark ? 0x20e1ed : 0x00869d);
+    slow.setHex(dark ? 0x204ee6 : 0x102d9d);
+    fast.setHex(dark ? 0x20e1ed : 0x006e89);
   }
   function resize() { budget = budgetForDevice(); }
   motion.addEventListener('change', resize);

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { frameTourContent } from './wt-measurements.js?v=0.2.0';
+import { COAST_VIEW, fitOverview, frameTourContent } from './wt-camera.js?v=0.2.0';
 import { froudePanel, updateFroudePanel } from './wt-froude-panel.js?v=0.2.0';
 import { createAccidentControls } from './wt-accident-controls.js?v=0.2.0';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -15,7 +15,7 @@ import {
 import { createWindTurbineModel } from './wt-model.js?v=0.2.0';
 
 const DEFAULT_CAMERA = {
-  normal: { pos: [47, 10, 22], target: [0, -0.8, 3] },
+  normal: COAST_VIEW,
   cutaway: { pos: [8.6, 2.3, 4.6], target: [0.0, 0.15, 0.2] },
   xray: { pos: [10.5, 2.6, 7.6], target: [0.0, -0.4, 0.0] },
   exploded: { pos: [23, 5, 25], target: [0, -2.8, 2.0] }
@@ -49,8 +49,8 @@ function init() {
   // =========================================================================
   // KAMERA-FLUG-INTERPOLATION
   // =========================================================================
-  let camAnim = null;
-  function flyCamera(posArr, targetArr, duration = 0.85, overview = false) {
+  let camAnim = null, overviewPreset = 'outside';
+  function flyCamera(posArr, targetArr, duration = 0.85, overview = null) {
     camAnim = {
       startPos: camera.position.clone(),
       endPos: new THREE.Vector3(...posArr),
@@ -59,13 +59,11 @@ function init() {
       elapsed: 0,
       duration
     };
-    if (overview) fitOverview(camAnim.endPos, camAnim.endTarget);
-  }
-  function fitOverview(position, target) {
-    const scale = Math.max(1, 1.12 * camera.zoom / camera.aspect);
-    position.sub(target).multiplyScalar(scale).add(target);
+    overviewPreset = overview;
+    fitTourFrame();
   }
   controls.addEventListener('start', () => {
+    overviewPreset = null;
     camAnim = null;
   });
 
@@ -86,6 +84,7 @@ function init() {
   let telemetry = computeTurbineTelemetry(appState.windSpeed);
   const accidentUI = createAccidentControls(document, turbine.accident, camera, controls, () => {
     camAnim = null;
+    fitTourFrame();
     updateTelemetryUI();
   });
 
@@ -334,11 +333,14 @@ function init() {
   }
 
   function setViewMode(mode, shouldFly = true) {
-    if (shouldFly && appState.tourActive && (mode === 'exploded' || appState.froude ||
+    if (shouldFly && appState.tourActive && (mode === 'exploded' || appState.tourIndex < 2 ||
       TURBINE_TOUR_STEPS[appState.tourIndex].focusPart === 'serviceAccess')) stopTour();
     if (mode === 'exploded') {
       if (accidentUI.start(telemetry, appState.viewMode)) {
-        flyCamera(DEFAULT_CAMERA.exploded.pos, DEFAULT_CAMERA.exploded.target, 0.65, true);
+        const shot = DEFAULT_CAMERA.exploded;
+        const end = new THREE.Vector3(...shot.pos), target = new THREE.Vector3(...shot.target);
+        end.sub(target).multiplyScalar(Math.max(1, 1.12 / camera.aspect)).add(target);
+        flyCamera(end.toArray(), shot.target, 0.65);
       }
       return;
     }
@@ -349,7 +351,7 @@ function init() {
       btn.classList.toggle('active', btn.dataset.viewMode === mode);
     });
     if (shouldFly && DEFAULT_CAMERA[mode]) {
-      flyCamera(DEFAULT_CAMERA[mode].pos, DEFAULT_CAMERA[mode].target, 0.85, mode === 'normal');
+      flyCamera(DEFAULT_CAMERA[mode].pos, DEFAULT_CAMERA[mode].target, 0.85, mode === 'normal' ? 'outside' : null);
     }
     if (window.ArcadeAudio) window.ArcadeAudio.click();
   }
@@ -424,7 +426,6 @@ function init() {
       </div>
     `;
 
-    fitTourFrame();
     // Zustand & Kamera für diesen Schritt anwenden
     setViewMode(step.viewMode, false);
     if (step.demoWind !== undefined) setWindSpeed(step.demoWind);
@@ -432,7 +433,7 @@ function init() {
     if (appState.froude) document.getElementById('wt-fr-slider')?.addEventListener('input', e => setWindSpeed(e.target.value));
     selectPart(step.focusPart, false);
     if (step.step === 1 || appState.froude) setFlow(true);
-    flyCamera(step.cameraPos, step.cameraTarget, 0.95, step.viewMode === 'normal');
+    flyToStep(step);
 
     document.getElementById('wt-tour-end')?.addEventListener('click', () => stopTour());
     document.getElementById('wt-tour-prev')?.addEventListener('click', () => {
@@ -463,13 +464,19 @@ function init() {
     renderTourStep();
   }
 
+  function flyToStep(step) {
+    const overview = step.viewMode === 'normal' ? 'wind' : null;
+    flyCamera(step.cameraPos, step.cameraTarget, .95, step.lesson === 'froude' ? 'rings' : overview);
+  }
+
   function stopTour() {
     appState.tourActive = false;
     appState.froude = false;
     studio.setMeasurements(false, telemetry);
     turbine.setAccessTour(false);
     if (elTourCard) elTourCard.classList.add('hidden');
-    fitTourFrame();
+    if (overviewPreset && appState.viewMode === 'normal') flyCamera(COAST_VIEW.pos, COAST_VIEW.target, .65, 'outside');
+    else fitTourFrame();
     if (elTourStartBtn) elTourStartBtn.classList.remove('active');
     if (window.ArcadeAudio) window.ArcadeAudio.click();
   }
@@ -507,8 +514,11 @@ function init() {
 
   document.getElementById('wt-btn-reset')?.addEventListener('click', () => {
     accidentUI.repair();
-    const cam = DEFAULT_CAMERA[appState.viewMode] || DEFAULT_CAMERA.normal;
-    flyCamera(cam.pos, cam.target, 0.85, appState.viewMode === 'normal');
+    if (appState.tourActive) flyToStep(TURBINE_TOUR_STEPS[appState.tourIndex]);
+    else {
+      const cam = DEFAULT_CAMERA[appState.viewMode];
+      flyCamera(cam.pos, cam.target, .85, appState.viewMode === 'normal' ? 'outside' : null);
+    }
     if (window.ArcadeAudio) window.ArcadeAudio.click();
   });
 
@@ -568,18 +578,21 @@ function init() {
   updateTelemetryUI();
   selectPart(null, false);
 
-  // Keep the three sections or the access demonstration between the toolbar and
-  // the tour card. Only UI/resize events touch the projection, never the render loop.
+  // Project into the free band between the toolbar and the active controls.
   function fitTourFrame() {
     const w = viewport.clientWidth, h = viewport.clientHeight;
+    if (!w || !h) return;
     let top = 0, bottom = h;
-    if (appState.tourActive && (appState.froude || TURBINE_TOUR_STEPS[appState.tourIndex].focusPart === 'serviceAccess')) {
+    const inTourBand = appState.tourActive && (appState.tourIndex < 2 || TURBINE_TOUR_STEPS[appState.tourIndex].focusPart === 'serviceAccess');
+    if (inTourBand || (!appState.tourActive && appState.viewMode === 'normal' && !accidentUI.active)) {
       const toolbar = document.getElementById('wt-mode-dock');
       top = toolbar.offsetTop + toolbar.offsetHeight + 4;
-      bottom = elTourCard.offsetTop - 5;
+      const lowerControl = inTourBand ? elTourCard : viewport.querySelector('.wt-bottom-bar');
+      bottom = lowerControl.offsetTop - 5;
     }
     frameTourContent(camera, w, h, top, bottom);
     studio.resizeLabels(h);
+    if (overviewPreset) fitOverview(camAnim?.endPos ?? camera.position, camAnim?.endTarget ?? controls.target, camera, overviewPreset);
   }
 
   // Resize Handling
@@ -591,7 +604,6 @@ function init() {
     wind.resize();
   }
   handleResize();
-  fitOverview(camera.position, controls.target);
   const resizeObs = new ResizeObserver(handleResize);
   resizeObs.observe(viewport);
   new ResizeObserver(fitTourFrame).observe(elTourCard);

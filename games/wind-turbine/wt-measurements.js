@@ -2,15 +2,9 @@ import * as T from 'three';
 import { ROTOR, RADIUS } from './wt-rotor.js?v=0.2.0';
 import { sampleSection } from './wt-airflow.js?v=0.2.0';
 import { axialInduction } from './wt-froude.js?v=0.2.0';
-
-// Project the tour subject into the unobstructed band of the full canvas.
-export function frameTourContent(camera, width, height, top = 0, bottom = height) {
-  camera.aspect = width / height;
-  camera.zoom = Math.max(.12, (bottom - top) / height);
-  if (top === 0 && bottom === height) camera.clearViewOffset();
-  else camera.setViewOffset(width, height, 0, (height - top - bottom) / 2, width, height);
-  camera.updateProjectionMatrix();
-}
+import { SECTION_OFFSETS } from './wt-camera.js?v=0.2.0';
+// Earlier pages on the same 0.2.0 test branch import the projection from here.
+export { frameTourContent } from './wt-camera.js?v=0.2.0';
 
 function makeLabel(text, doc) {
   const canvas = doc.createElement('canvas');
@@ -29,7 +23,8 @@ function makeLabel(text, doc) {
 export function createMeasurements(doc) {
   const group = new T.Group(), circle = new T.RingGeometry(.985, 1.015, 100);
   group.visible = false;
-  const stations = [[-1.70, '1', 0x0ba6b8], [0, 'R', 0x398ba8], [1.85, '3', 0x3666c5]].map(([xi, label, color]) => {
+  const stations = [['1', 0x0ba6b8], ['R', 0x398ba8], ['3', 0x3666c5]].map(([label, color], i) => {
+    const xi = SECTION_OFFSETS[i];
     const ring = new T.Mesh(circle, new T.MeshBasicMaterial({ color, side: T.DoubleSide, transparent: true, opacity: .70, depthWrite: false }));
     const badge = makeLabel(label, doc);
     ring.position.set(0, ROTOR.y, ROTOR.z - xi * RADIUS);
