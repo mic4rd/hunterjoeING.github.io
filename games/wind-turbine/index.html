@@ -6,7 +6,7 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https://upload.wikimedia.org; media-src 'self' data: blob:; connect-src 'self' https://hunterjoe-scores.hunterjoeing.workers.dev https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; object-src 'none'; base-uri 'self'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Windkraftanlage 3D – Interaktiver Explainer · HunterJoe Arcade</title>
-  <meta name="description" content="Interaktiver 3D-Explainer einer Windkraftanlage: Cutaway-Aufschnitt, X-Ray-Röntgenblick, Explosionsansicht mit 12 beschrifteten Baugruppen, Windgeschwindigkeits-Regler, Live-Leistungskurve &amp; 6-Schritte-Tour." />
+  <meta name="description" content="Interaktiver 3D-Explainer einer Windkraftanlage: Cutaway-Aufschnitt, X-Ray-Röntgenblick, 12 beschriftete Baugruppen, Windgeschwindigkeits-Regler, Live-Leistungskurve &amp; 6-Schritte-Tour." />
   <meta name="robots" content="index, follow" />
   <meta name="theme-color" content="#F6F8FC" />
   <link rel="canonical" href="https://hunterjoeing.github.io/games/wind-turbine/" />
@@ -20,7 +20,7 @@
   <meta property="og:site_name" content="HunterJoe Arcade" />
   <meta property="og:locale" content="de_DE" />
   <meta property="og:title" content="Windkraftanlage 3D – Interaktiver Explainer · HunterJoe Arcade" />
-  <meta property="og:description" content="Erlebe in echtem 3D, wie eine Windkraftanlage Wind in Strom verwandelt: Cutaway, X-Ray, Explosionsansicht, Wind-Regler, Leistungskurve &amp; geführte Tour." />
+  <meta property="og:description" content="Erlebe in echtem 3D, wie eine Windkraftanlage Wind in Strom verwandelt: Cutaway, X-Ray, Windströmung, Wind-Regler, Leistungskurve &amp; geführte Tour." />
   <meta property="og:url" content="https://hunterjoeing.github.io/games/wind-turbine/" />
   <meta property="og:image" content="https://hunterjoeing.github.io/og-cover.png" />
   <script type="application/ld+json">
@@ -28,7 +28,7 @@
     "@context": "https://schema.org",
     "@type": "WebApplication",
     "name": "Windkraftanlage 3D – Interaktiver Explainer",
-    "description": "Interaktiver 3D-Explainer einer 3,6-MW-Windkraftanlage mit Cutaway, X-Ray, Explosionsansicht, Windgeschwindigkeits-Regler, Leistungskurve und Schritt-für-Schritt-Tour.",
+    "description": "Interaktiver 3D-Explainer einer 3,6-MW-Windkraftanlage mit Cutaway, X-Ray, Windströmung, Windgeschwindigkeits-Regler, Leistungskurve und Schritt-für-Schritt-Tour.",
     "url": "https://hunterjoeing.github.io/games/wind-turbine/",
     "inLanguage": "de",
     "isAccessibleForFree": true,
@@ -42,19 +42,20 @@
   {
     "imports": {
       "three": "../../shared/vendor/three-0.170.0/build/three.module.min.js",
+      "three/addons/postprocessing/GTAOPass.js": "./vendor/three-0.170.0-addons/postprocessing/GTAOPass.js?v=0.2.0",
       "three/addons/": "../../shared/vendor/three-0.170.0/examples/jsm/"
     }
   }
   </script>
   <link rel="stylesheet" href="../../shared/arcade.css" />
-  <link rel="stylesheet" href="./styles.css?v=0.1.1" />
+  <link rel="stylesheet" href="./styles.css?v=0.2.0" />
 </head>
 <body>
   <header class="arcade-topbar wt-topbar">
     <div class="topbar-left">
       <a class="back-hub-btn" href="../../index.html" aria-label="Zurück zur HunterJoe Arcade">← Arcade</a>
       <h1 class="topbar-title">🌬️ Windkraftanlage 3D</h1>
-      <button type="button" class="wt-version-pill" id="wt-version-btn" title="Änderungen dieser Version anzeigen">v0.1.1</button>
+      <button type="button" class="wt-version-pill" id="wt-version-btn" title="Änderungen dieser Version anzeigen">v0.2.0</button>
     </div>
     <div class="topbar-right">
       <button type="button" class="icon-btn" id="btn-arcade-theme" title="Hell-/Dunkel-Modus wechseln">☀️</button>
@@ -67,19 +68,45 @@
       <canvas id="wt-canvas"></canvas>
       <div class="wt-label-layer" id="wt-label-layer" aria-label="Bauteil-Beschriftungen"></div>
 
-      <!-- 01 Cutaway · 02 X-Ray · 03 Exploded -->
-      <div class="wt-mode-dock" role="toolbar" aria-label="3D-Ansichtsmodus">
+      <!-- 01 Cutaway · 02 X-Ray · 03 Explosionsansicht -->
+      <div class="wt-mode-dock" role="toolbar" aria-label="3D-Ansicht und Einstellungen">
         <div class="wt-dock-group">
           <button type="button" class="wt-mode-btn active" data-view-mode="normal">Außenansicht</button>
           <button type="button" class="wt-mode-btn" data-view-mode="cutaway"><span class="wt-mode-num">01</span> Cutaway</button>
           <button type="button" class="wt-mode-btn" data-view-mode="xray"><span class="wt-mode-num">02</span> X-Ray</button>
-          <button type="button" class="wt-mode-btn" data-view-mode="exploded"><span class="wt-mode-num">03</span> Exploded</button>
+          <button type="button" class="wt-mode-btn" data-view-mode="exploded"><span class="wt-mode-num">03</span> Explosionsansicht</button>
         </div>
-        <div class="wt-dock-group">
+        <div class="wt-dock-group wt-dock-actions">
           <button type="button" class="wt-chip-btn" id="wt-btn-labels" title="Alle 12 Bauteile beschriften">🏷️ Labels</button>
-          <button type="button" class="wt-chip-btn active" id="wt-btn-flow" title="Wind- &amp; Stromfluss anzeigen">💨 Fluss</button>
+          <button type="button" class="wt-chip-btn active" id="wt-btn-flow" aria-pressed="true" title="Wind- &amp; Stromfluss anzeigen">💨 Fluss</button>
           <button type="button" class="wt-chip-btn" id="wt-btn-reset" title="Kamera zurücksetzen">↺ Reset</button>
+          <button type="button" class="wt-chip-btn" id="wt-btn-settings" aria-label="Einstellungen" title="Einstellungen" aria-expanded="false" aria-controls="wt-settings"><span aria-hidden="true">⚙︎</span></button>
         </div>
+        <section id="wt-settings" class="wt-settings-panel" aria-labelledby="wt-settings-heading" hidden>
+          <h2 id="wt-settings-heading">Einstellungen</h2>
+          <fieldset id="wt-ao-options" aria-describedby="wt-ao-status">
+            <legend>Ambient Occlusion</legend>
+            <small id="wt-ao-status">Kontaktschatten · automatisch</small>
+            <div class="wt-ao-options">
+              <label><input type="radio" name="wt-ao" value="0"><span>Aus</span></label>
+              <label><input type="radio" name="wt-ao" value="1"><span>Niedrig</span></label>
+              <label><input type="radio" name="wt-ao" value="2"><span>Mittel</span></label>
+              <label><input type="radio" name="wt-ao" value="3"><span>Stark</span></label>
+            </div>
+          </fieldset>
+          <label class="wt-setting-row">Schatten <input type="checkbox" id="wt-shadows" checked></label>
+          <div>
+            <div class="wt-setting-row"><label for="wt-density">Partikeldichte</label><output for="wt-density" id="wt-density-value">100 %</output></div>
+            <input type="range" id="wt-density" min="25" max="200" step="5" value="100" aria-valuetext="100 %">
+          </div>
+          <div class="wt-setting-row wt-fps">FPS <span id="wt-settings-fps">–</span></div>
+        </section>
+      </div>
+
+      <div id="wt-accident" class="wt-explosion-banner" hidden>
+        <p class="wt-explosion-title" id="wt-accident-title"></p>
+        <p class="wt-explosion-sub" id="wt-accident-message" role="status"></p>
+        <button type="button" id="wt-repair" class="wt-explosion-repair" hidden>🔧 Anlage reparieren</button>
       </div>
 
       <!-- 06 Step-by-Step Tour Card -->
@@ -117,6 +144,7 @@
           <button type="button" class="wt-preset-btn" data-wind="12">Nennwind</button>
           <button type="button" class="wt-preset-btn" data-wind="26.5">Sturm</button>
         </div>
+        <p class="wt-chart-hint">Folge einem blauen Stromfaden. Wo die Kugeln enger stehen, fließt die Luft langsamer. Am Blattkontakt leuchten sie kurz auf.</p>
         <div class="wt-status-pill" id="wt-status-badge" data-status="partial">Teillast (Optimal-Cp)</div>
       </div>
 
@@ -169,6 +197,6 @@
   <script src="../../shared/releases.js?v=0.4.1"></script>
   <script src="../../shared/update-banner.js?v=0.4.0"></script>
   <script src="../../shared/burger-menu.js?v=0.4.0"></script>
-  <script type="module" src="./wt-main.js?v=0.1.1"></script>
+  <script type="module" src="./wt-main.js?v=0.2.0"></script>
 </body>
 </html>

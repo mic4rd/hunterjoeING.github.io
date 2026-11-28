@@ -125,6 +125,16 @@ const arcadeReleases = {
       ],
     },
     {
+      app: "wind_turbine", version: "0.2.0", date: "2026-11-28", type: "feature", title: "Wind am Rotor sichtbar machen",
+      author: "Michi", model: "Astra 6.2",
+      highlights: [
+        "Blaue Kugelspuren zeigen den Wind am Rotor. Engere Abstände machen den langsameren Nachlauf sichtbar, kurzes Aufleuchten den Kontakt mit einem Blatt.",
+        "Die Tour zeigt den Rotor von der Seite und erklärt, wie viel Energie er dem Wind entziehen kann.",
+        "Studiolicht, weiche Schatten und ein rauchgrauer Röntgenblick machen die Bauteile besser erkennbar.",
+        "Im Grafikmenü lassen sich Kontaktschatten, Schatten und Partikeldichte einstellen und die Bildrate ablesen.",
+      ],
+    },
+    {
       app: "wind_turbine", version: "0.1.3", date: "2026-11-27", type: "patch", title: "Lokales 3D-Hosting & Sicherheits-Header",
       author: "Joe", model: "Neon",
       highlights: [

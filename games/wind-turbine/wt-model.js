@@ -1,5 +1,7 @@
 import * as THREE from 'three';
-import { TURBINE_PARTS } from './wt-data.js';
+import { createTurbineAccident } from './wt-explosion.js?v=0.2.0';
+import { TURBINE_PARTS } from './wt-data.js?v=0.2.0';
+import { ROTOR, bladeRings, spinnerRadius } from './wt-rotor.js?v=0.2.0';
 
 /**
  * Erzeugt ein prozedurales Zahnrad als ExtrudeGeometry.
@@ -44,67 +46,12 @@ function createGearGeometry(teeth, outerR, rootR, depth, boreR = 0.08) {
  * Erzeugt ein realistisch profiliertes, verwundenes Rotorblatt (NACA-ähnliches Profil)
  * entlang der +Y-Achse von y = 0 (Wurzel) bis y = length (Blattspitze).
  */
-function createAirfoilBladeGeometry(length = 8.4) {
-  const spanSegs = 26;
-  const profileSegs = 24;
-  const positions = [];
-  const uvs = [];
-  const indices = [];
-
+function createAirfoilBladeGeometry() {
+  const { spans: spanSegs, profileSegments: profileSegs } = ROTOR;
+  const positions = bladeRings(), uvs = [], indices = [];
   for (let i = 0; i <= spanSegs; i++) {
-    const t = i / spanSegs; // 0 = Wurzel, 1 = Spitze
-    const y = t * length;
-
-    // Übergang von runder Wurzel (t < 0.14) zum schlanken Tragflächenprofil
-    const rootBlend = Math.max(0, Math.min(1, (t - 0.04) / 0.14));
-    const chord =
-      t < 0.18
-        ? 0.36 + (t / 0.18) * 0.42
-        : 0.78 * Math.pow(1 - (t - 0.18) / 0.85, 0.78) + 0.07;
-    const thickness =
-      t < 0.18
-        ? 0.36 * (1 - rootBlend) + chord * 0.26 * rootBlend
-        : chord * (0.24 - t * 0.11);
-    const twistRad = THREE.MathUtils.degToRad(16 * Math.pow(1 - t, 1.35) - 2);
-    const pitchAxisOffset = chord * 0.30; // Schwerpunkt bei ca. 30% Profiltiefe
-    const preBendZ = Math.pow(t, 2.2) * 0.22; // leichte Vorkrümmung gegen Turmberührung
-
-    for (let j = 0; j <= profileSegs; j++) {
-      const u = j / profileSegs;
-      const theta = u * Math.PI * 2;
-
-      // Kreis an der Wurzel
-      const cx = Math.cos(theta) * 0.18;
-      const cz = Math.sin(theta) * 0.18;
-
-      // NACA-ähnliches gewölbtes Profil
-      const s = 0.5 * (1 - Math.cos(theta)); // 0 (Vorderkante) -> 1 (Hinterkante)
-      const yt =
-        5 *
-        thickness *
-        (0.2969 * Math.sqrt(Math.max(0.0001, s)) -
-          0.126 * s -
-          0.3516 * s * s +
-          0.2843 * s * s * s -
-          0.1015 * s * s * s * s);
-      const camber = 0.045 * chord * Math.sin(Math.PI * s);
-      const sign = theta <= Math.PI ? 1 : -1;
-
-      const ax = pitchAxisOffset - s * chord;
-      const az = camber + sign * yt;
-
-      const bx = cx * (1 - rootBlend) + ax * rootBlend;
-      const bz = cz * (1 - rootBlend) + az * rootBlend;
-
-      // Verwindung um Y-Achse (passend zur Drehrichtung im Uhrzeigersinn)
-      const rx = bx * Math.cos(-twistRad) - bz * Math.sin(-twistRad);
-      const rz = bx * Math.sin(-twistRad) + bz * Math.cos(-twistRad) + preBendZ;
-
-      positions.push(rx, y, rz);
-      uvs.push(u, t);
-    }
+    for (let j = 0; j <= profileSegs; j++) uvs.push(j / profileSegs, i / spanSegs);
   }
-
   const ring = profileSegs + 1;
   for (let i = 0; i < spanSegs; i++) {
     for (let j = 0; j < profileSegs; j++) {
@@ -146,6 +93,11 @@ function createBladeTexture() {
   ctx.fillRect(0, 46, 256, 24);
   ctx.fillStyle = '#dc2626';
   ctx.fillRect(0, 70, 256, 32);
+
+  // Schmale graue Schutzkante am GFK-Profil.
+  ctx.fillStyle = 'rgba(73, 83, 92, 0.18)';
+  ctx.fillRect(0, 0, 4, 512);
+  ctx.fillRect(252, 0, 4, 512);
 
   // Dezente Wartungsmarkierungen
   ctx.fillStyle = 'rgba(15, 23, 42, 0.14)';
@@ -192,36 +144,34 @@ export function createWindTurbineModel() {
   const root = new THREE.Group();
   const partGroups = new Map();
   const basePositions = new Map();
-  const explodeOffsets = new Map();
   const shellCutawayMeshes = [];
   const shellXrayRecords = [];
-  const xrayWireframes = [];
   const allPartMeshes = new Map();
 
   const bladeTex = createBladeTexture();
-  const metalTex = createBrushedMetalTexture('#94a3b8');
+  const metalTex = createBrushedMetalTexture('#c6c9cb');
 
   // Materialien
   const mats = {
     compositeWhite: new THREE.MeshStandardMaterial({
       color: 0xf1f5f9,
-      roughness: 0.34,
-      metalness: 0.08
+      roughness: 0.36,
+      metalness: 0.03
     }),
     compositeCutaway: new THREE.MeshStandardMaterial({
       color: 0xf1f5f9,
-      roughness: 0.34,
-      metalness: 0.08,
+      roughness: 0.36,
+      metalness: 0.03,
       transparent: true,
       opacity: 1
     }),
     bladeMat: new THREE.MeshStandardMaterial({
       map: bladeTex,
-      roughness: 0.28,
-      metalness: 0.06
+      roughness: 0.31,
+      metalness: 0.02
     }),
     steelDark: new THREE.MeshStandardMaterial({
-      color: 0x334155,
+      color: 0x525962,
       map: metalTex,
       roughness: 0.38,
       metalness: 0.82
@@ -243,7 +193,7 @@ export function createWindTurbineModel() {
       metalness: 0.86
     }),
     copper: new THREE.MeshStandardMaterial({
-      color: 0xd97742,
+      color: 0xbb683e,
       roughness: 0.26,
       metalness: 0.90,
       emissive: new THREE.Color(0x000000),
@@ -272,13 +222,13 @@ export function createWindTurbineModel() {
     }),
     towerMat: new THREE.MeshStandardMaterial({
       color: 0xe2e8f0,
-      roughness: 0.42,
-      metalness: 0.22
+      roughness: 0.38,
+      metalness: 0.28
     }),
     towerCutaway: new THREE.MeshStandardMaterial({
       color: 0xe2e8f0,
-      roughness: 0.42,
-      metalness: 0.22,
+      roughness: 0.38,
+      metalness: 0.28,
       transparent: true,
       opacity: 1
     }),
@@ -300,44 +250,34 @@ export function createWindTurbineModel() {
       emissiveIntensity: 1.5,
       roughness: 0.2
     }),
-    xrayShell: new THREE.MeshPhysicalMaterial({
-      color: 0x38bdf8,
-      transparent: true,
-      opacity: 0.13,
-      roughness: 0.12,
-      metalness: 0.05,
-      depthWrite: false,
-      side: THREE.DoubleSide
+    xrayShell: new THREE.MeshMatcapMaterial({
+      name: 'xraySmoke', color: 0x555555, transparent: true, opacity: 0.13,
+      depthWrite: false, side: THREE.DoubleSide, forceSinglePass: true, fog: false
     })
   };
+  const xrayFocus = mats.xrayShell.clone();
+  const edgeMat = new THREE.LineBasicMaterial({
+    color: 0x727272, transparent: true, opacity: 0, depthWrite: false, fog: false
+  });
 
   function registerPartGroup(id, group) {
     partGroups.set(id, group);
-    const meta = TURBINE_PARTS.find(p => p.id === id);
-    explodeOffsets.set(id, new THREE.Vector3(...(meta?.explodeOffset || [0, 0, 0])));
     root.add(group);
     return group;
   }
 
   function registerXrayShell(mesh) {
-    shellXrayRecords.push({ mesh, normalMat: mesh.material });
-    const edges = new THREE.EdgesGeometry(mesh.geometry, 26);
-    const lineMat = new THREE.LineBasicMaterial({
-      color: 0x38bdf8,
-      transparent: true,
-      opacity: 0,
-      depthWrite: false
-    });
-    const line = new THREE.LineSegments(edges, lineMat);
+    const line = new THREE.LineSegments(new THREE.EdgesGeometry(mesh.geometry, 26), edgeMat);
+    line.visible = false;
     mesh.add(line);
-    xrayWireframes.push(lineMat);
+    shellXrayRecords.push({ mesh, line });
   }
 
   // =========================================================================
   // 1. ROTORNABE & BLÄTTER (z = +3.9, rotieren um Z-Achse)
   // =========================================================================
   const hubGroup = registerPartGroup('hub', new THREE.Group());
-  hubGroup.position.set(0, 0.25, 3.85);
+  hubGroup.position.set(0, ROTOR.y, ROTOR.z);
 
   const rotorSpinGroup = new THREE.Group();
   hubGroup.add(rotorSpinGroup);
@@ -371,7 +311,7 @@ export function createWindTurbineModel() {
   for (let i = 0; i <= 14; i++) {
     const t = i / 14;
     const y = -0.65 + t * 2.25;
-    const r = Math.max(0.02, 1.16 * Math.pow(1 - t, 0.56));
+    const r = spinnerRadius(y);
     spinnerPoints.push(new THREE.Vector2(r, y));
   }
   const spinnerBackGeo = new THREE.LatheGeometry(spinnerPoints, 28, Math.PI * 0.5, Math.PI);
@@ -389,18 +329,18 @@ export function createWindTurbineModel() {
 
   // 2. ROTORBLÄTTER (eigene Explosionsgruppe, folgt Rotation der Nabe!)
   const bladesGroup = registerPartGroup('blades', new THREE.Group());
-  bladesGroup.position.set(0, 0.25, 3.85);
+  bladesGroup.position.set(0, ROTOR.y, ROTOR.z);
   const bladesSpinGroup = new THREE.Group();
   bladesGroup.add(bladesSpinGroup);
 
-  const bladeGeo = createAirfoilBladeGeometry(8.6);
+  const bladeGeo = createAirfoilBladeGeometry();
   const bladePitchPivots = [];
   for (let i = 0; i < 3; i++) {
     const arm = new THREE.Group();
     arm.rotation.z = (i * Math.PI * 2) / 3;
 
     const pitchPivot = new THREE.Group();
-    pitchPivot.position.set(0, 0.82, 0);
+    pitchPivot.position.set(0, ROTOR.root, 0);
 
     const bladeMesh = new THREE.Mesh(bladeGeo, mats.bladeMat);
     pitchPivot.add(bladeMesh);
@@ -461,7 +401,7 @@ export function createWindTurbineModel() {
   registerXrayShell(gbFrontCover);
 
   // Zahnrad 1: Großes Antriebsrad (Hauptwelle) – Teilkreis ~0.50
-  const gear1 = new THREE.Mesh(createGearGeometry(24, 0.54, 0.46, 0.26, 0.18), mats.gearGold);
+  const gear1 = new THREE.Mesh(createGearGeometry(24, 0.54, 0.46, 0.26, 0.18), mats.gearSteel);
   gear1.position.set(0, 0, 0.34);
   gearboxGroup.add(gear1);
 
@@ -477,7 +417,7 @@ export function createWindTurbineModel() {
   interShaft.position.set(0.54, 0.54, 0.04);
   gearboxGroup.add(interShaft);
 
-  const gear3 = new THREE.Mesh(createGearGeometry(22, 0.56, 0.48, 0.24, 0.09), mats.gearGold);
+  const gear3 = new THREE.Mesh(createGearGeometry(22, 0.56, 0.48, 0.24, 0.09), mats.gearSteel);
   gear3.position.set(0.54, 0.54, -0.26);
   gearboxGroup.add(gear3);
 
@@ -622,6 +562,7 @@ export function createWindTurbineModel() {
   stripe.position.set(1.36, 0.18, -0.2);
   nacelleCutawayCover.add(stripe);
   shellCutawayMeshes.push(stripe);
+  registerXrayShell(stripe);
   nacelleGroup.add(nacelleCutawayCover);
 
   // Orangefarbene Schnittkante (sichtbar im Cutaway!)
@@ -820,36 +761,13 @@ export function createWindTurbineModel() {
   ringAccent.rotation.x = -Math.PI / 2;
   ringAccent.position.y = -11.24;
   groundGroup.add(ringAccent);
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(160, 160),
+    new THREE.MeshStandardMaterial({ roughness: 0.95, metalness: 0 }));
+  floor.rotation.x = -Math.PI / 2;
+  floor.position.y = -11.59;
+  floor.receiveShadow = true;
+  groundGroup.add(floor);
   root.add(groundGroup);
-
-  // =========================================================================
-  // ANIMIERTE 3D-WINDSTRÖMUNGSLINIEN
-  // =========================================================================
-  const windGroup = new THREE.Group();
-  const windStreaks = [];
-  const streakGeo = new THREE.CylinderGeometry(0.025, 0.045, 2.4, 8);
-  streakGeo.rotateX(Math.PI / 2);
-  const streakMat = new THREE.MeshBasicMaterial({
-    color: 0x38bdf8,
-    transparent: true,
-    opacity: 0.38,
-    depthWrite: false
-  });
-  for (let i = 0; i < 42; i++) {
-    const r = 1.6 + Math.random() * 7.6;
-    const ang = Math.random() * Math.PI * 2;
-    const zStart = 12 - Math.random() * 24;
-    const mesh = new THREE.Mesh(streakGeo, streakMat);
-    mesh.position.set(Math.cos(ang) * r, 0.25 + Math.sin(ang) * r, zStart);
-    windGroup.add(mesh);
-    windStreaks.push({
-      mesh,
-      radius: r,
-      angle: ang,
-      speedBias: 0.8 + Math.random() * 0.45
-    });
-  }
-  root.add(windGroup);
 
   // Tag alle Baugruppen für Klick-Raycasting & Highlighting + Basispositionen sichern
   for (const [id, group] of partGroups.entries()) {
@@ -865,8 +783,6 @@ export function createWindTurbineModel() {
   // Zustand für sanfte Übergänge
   const state = {
     viewMode: 'normal',
-    explodeTarget: 0,
-    explodeCurrent: 0,
     cutawayTarget: 0,
     cutawayCurrent: 0,
     xrayTarget: 0,
@@ -881,7 +797,6 @@ export function createWindTurbineModel() {
 
   function setViewMode(mode) {
     state.viewMode = mode;
-    state.explodeTarget = mode === 'exploded' ? 1 : 0;
     state.cutawayTarget = mode === 'cutaway' ? 1 : 0;
     state.xrayTarget = mode === 'xray' ? 1 : 0;
   }
@@ -910,79 +825,76 @@ export function createWindTurbineModel() {
     }
   }
 
+  for (const rec of shellXrayRecords) rec.normalMat = rec.mesh.material;
+  const highlights = new Map();
+  for (const [id, meshes] of allPartMeshes) {
+    highlights.set(id, new Set(meshes.map(m => m.material).filter(m => m.userData._isolatedPartId)));
+  }
   function setSelectedPart(partId) {
     state.selectedPart = partId;
-    for (const [id, meshes] of allPartMeshes.entries()) {
-      const active = Boolean(partId && id === partId);
-      for (const m of meshes) {
-        if (!m.material || !m.material.emissive || animatedMats.has(m.material)) continue;
-        if (m === beaconLightMesh || m === genRotorCore || m === brakeCaliper) continue;
-        if (active) {
-          m.material.emissive.setHex(0x2563eb);
-          m.material.emissiveIntensity = 0.38;
-        } else {
-          const baseHex = m.material.userData?._baseEmissiveHex ?? 0x000000;
-          const baseInt = m.material.userData?._baseEmissiveIntensity ?? 0;
-          m.material.emissive.setHex(baseHex);
-          m.material.emissiveIntensity = baseInt;
-        }
+    for (const [id, materials] of highlights) {
+      for (const mat of materials) {
+        mat.emissive.setHex(id === partId ? 0x2563eb : mat.userData._baseEmissiveHex);
+        mat.emissiveIntensity = id === partId ? 0.38 : mat.userData._baseEmissiveIntensity;
       }
     }
   }
 
   function setFlowVisible(visible) {
     state.showFlow = visible;
-    windGroup.visible = visible;
-    energyPulseGroup.visible = visible;
+    energyPulseGroup.visible = visible && accident.state.phase === 'idle';
   }
 
   function applyTheme(theme) {
     const isDark = theme === 'dark';
     basePlate.material.color.setHex(isDark ? 0x162033 : 0xdbe3ee);
     ringAccent.material.color.setHex(isDark ? 0x38bdf8 : 0x1e3a8a);
-    streakMat.color.setHex(isDark ? 0x38bdf8 : 0x0284c7);
-    mats.xrayShell.color.setHex(isDark ? 0x38bdf8 : 0x1d4ed8);
-    xrayWireframes.forEach(m => m.color.setHex(isDark ? 0x38bdf8 : 0x1e40af));
+    floor.material.color.setHex(isDark ? 0x171f2b : 0xd9e0e8);
+    mats.xrayShell.color.setHex(isDark ? 0x808080 : 0x555555);
+    xrayFocus.color.setHex(isDark ? 0xd4d4d4 : 0x989898);
+    edgeMat.color.setHex(isDark ? 0xbcbcbc : 0x727272);
   }
 
-  function getPartWorldAnchor(partId) {
-    const meta = TURBINE_PARTS.find(p => p.id === partId);
+  const anchorOffsets = new Map(TURBINE_PARTS.map(part => [part.id, new THREE.Vector3(...part.anchor)]));
+  function getPartWorldAnchor(partId, out = new THREE.Vector3()) {
     const group = partGroups.get(partId);
-    if (!meta || !group) return new THREE.Vector3();
-    const base = basePositions.get(partId);
-    const delta = group.position.clone().sub(base);
-    return new THREE.Vector3(...meta.anchor).add(delta);
+    if (!group) return out.set(0, 0, 0);
+    return out.copy(group.position).sub(basePositions.get(partId)).add(anchorOffsets.get(partId));
   }
+  const accident = createTurbineAccident({
+    root, groups: partGroups, blades: bladePitchPivots, spinning: [rotorSpinGroup, bladesSpinGroup, mainShaftSpin],
+    brake: brakeCaliper, shells: shellXrayRecords, hidden: [energyPulseGroup, cutTrimTop, cutTrimBottom],
+    floorY: basePlate.position.y + basePlate.geometry.parameters.height / 2, win: globalThis.window
+  });
+  const trafoDelta = new THREE.Vector3();
+  const flowPose = {};
 
   function update(dt, telemetry) {
+    if (accident.state.phase !== 'idle') {
+      accident.update(dt);
+      return flowPose;
+    }
     const viewDt = Math.min(0.25, dt);
     const clampedDt = Math.min(0.05, dt);
     state.time += clampedDt;
 
-    // Sanfte, zügige Übergänge für Cutaway, X-Ray & Exploded
+    // Sanfte, zügige Übergänge für Cutaway und X-Ray
     const lerpSpeed = Math.min(1, viewDt * 8.5);
-    state.explodeCurrent += (state.explodeTarget - state.explodeCurrent) * lerpSpeed;
     state.cutawayCurrent += (state.cutawayTarget - state.cutawayCurrent) * lerpSpeed;
     state.xrayCurrent += (state.xrayTarget - state.xrayCurrent) * lerpSpeed;
-    if (Math.abs(state.explodeTarget - state.explodeCurrent) < 0.015) state.explodeCurrent = state.explodeTarget;
     if (Math.abs(state.cutawayTarget - state.cutawayCurrent) < 0.015) state.cutawayCurrent = state.cutawayTarget;
     if (Math.abs(state.xrayTarget - state.xrayCurrent) < 0.015) state.xrayCurrent = state.xrayTarget;
 
-    // 1) Exploded-Positionen anwenden
-    for (const [id, group] of partGroups.entries()) {
-      const base = basePositions.get(id);
-      const off = explodeOffsets.get(id);
-      group.position.copy(base).addScaledVector(off, state.explodeCurrent);
-    }
-
     // 2) X-Ray-Material umschalten (vor Cutaway-Transparenz anwenden!)
     const useXray = state.xrayCurrent > 0.18;
-    mats.xrayShell.opacity = 0.06 + state.xrayCurrent * 0.13;
+    mats.xrayShell.opacity = 0.04 + state.xrayCurrent * 0.09;
+    xrayFocus.opacity = mats.xrayShell.opacity * 1.35;
+    edgeMat.opacity = state.xrayCurrent * 0.48;
     for (const rec of shellXrayRecords) {
-      rec.mesh.material = useXray ? mats.xrayShell : rec.normalMat;
-    }
-    for (const lineMat of xrayWireframes) {
-      lineMat.opacity = state.xrayCurrent * 0.62;
+      const shell = rec.mesh.userData.partId === state.selectedPart ? xrayFocus : mats.xrayShell;
+      rec.mesh.material = useXray ? shell : rec.normalMat;
+      rec.mesh.castShadow = !useXray;
+      rec.line.visible = useXray;
     }
 
     // 3) Cutaway-Deckel weich ausblenden (mit needsUpdate beim Wechsel transparent)
@@ -1003,12 +915,13 @@ export function createWindTurbineModel() {
         }
       }
     }
-    cutTrimMat.opacity = state.cutawayCurrent * (1 - state.xrayCurrent);
+    cutTrimTop.visible = cutTrimBottom.visible = state.cutawayCurrent > 0.01;
+    cutTrimTop.material.opacity = cutTrimBottom.material.opacity = state.cutawayCurrent * (1 - state.xrayCurrent);
 
     // 4) Mechanische Rotation (Rotor, Wellen, verzahnte Zahnräder, Generator)
     // Visuelle Skalierung: 14.8 U/min = ca. 1.55 rad/s (realistisch & angenehm fürs Auge!)
     const rotorOmega = (telemetry.rotorRpm * Math.PI * 2) / 60;
-    state.rotorAngle -= rotorOmega * clampedDt;
+    state.rotorAngle += ROTOR.spinSign * rotorOmega * clampedDt;
     rotorSpinGroup.rotation.z = state.rotorAngle;
     bladesSpinGroup.rotation.z = state.rotorAngle;
     mainShaftSpin.rotation.z = state.rotorAngle;
@@ -1042,7 +955,7 @@ export function createWindTurbineModel() {
     // 7) Generator-Induktionsglühen & Bremsen-Status
     const loadRatio = telemetry.powerMW / 3.6;
     mats.generatorRotor.emissiveIntensity = 0.12 + loadRatio * 1.35;
-    mats.copper.emissive.setHex(0x0ea5e9);
+    mats.copper.emissive.setHex(0xb75a28);
     mats.copper.emissiveIntensity = loadRatio * 0.42;
     mats.brakeRed.emissiveIntensity = telemetry.brakeActive ? 0.6 + 0.4 * Math.sin(state.time * 8) : 0.0;
     brakeCaliper.position.x = telemetry.brakeActive ? 0.34 : 0.39;
@@ -1051,35 +964,25 @@ export function createWindTurbineModel() {
     const blink = Math.sin(state.time * 3.1) > 0.35 ? 2.2 : 0.15;
     mats.beaconRed.emissiveIntensity = blink;
 
-    // 8) Windströmungslinien
-    if (state.showFlow) {
-      const windVel = Math.max(0.5, telemetry.windSpeed * 0.72);
-      streakMat.opacity = Math.min(0.62, 0.08 + telemetry.windSpeed * 0.02);
-      for (const s of windStreaks) {
-        s.mesh.position.z -= windVel * s.speedBias * clampedDt;
-        // Leichter Wirbel hinter der Rotorebene (z < 3.8)
-        if (s.mesh.position.z < 3.8 && telemetry.rotorRpm > 0.5) {
-          s.angle += 0.22 * loadRatio * clampedDt;
-          const wakeR = s.radius * 1.04;
-          s.mesh.position.x = Math.cos(s.angle) * wakeR;
-          s.mesh.position.y = 0.25 + Math.sin(s.angle) * wakeR;
-        }
-        if (s.mesh.position.z < -12) {
-          s.mesh.position.z = 12 + Math.random() * 2;
-          s.mesh.position.x = Math.cos(s.angle) * s.radius;
-          s.mesh.position.y = 0.25 + Math.sin(s.angle) * s.radius;
-        }
-      }
+    flowPose.angle = state.rotorAngle;
+    flowPose.pitch = state.currentPitchRad;
+    flowPose.bladeZ = bladesGroup.position.z;
+    flowPose.hubZ = hubGroup.position.z;
+    flowPose.towerY = towerGroup.position.y;
+    flowPose.nacelleY = nacelleGroup.position.y;
+    flowPose.nacelleZ = nacelleGroup.position.z;
 
-      // 9) Elektrische Energie-Impulse (sichtbar im Cutaway, X-Ray & Exploded-Modus)
-      const interiorOpen = state.cutawayCurrent > 0.1 || state.xrayCurrent > 0.1 || state.explodeCurrent > 0.1;
+    if (!state.showFlow) energyPulseGroup.visible = false;
+    if (state.showFlow) {
+      // 9) Elektrische Energie-Impulse (sichtbar in Cutaway und X-Ray)
+      const interiorOpen = state.cutawayCurrent > 0.1 || state.xrayCurrent > 0.1;
       const flowActive = loadRatio > 0.01 && interiorOpen;
       energyPulseGroup.visible = flowActive;
       if (flowActive) {
         pulseMat.opacity = 0.45 + loadRatio * 0.55;
         const speed = 0.22 + loadRatio * 0.58;
         const towerDeltaY = towerGroup.position.y - basePositions.get('tower').y;
-        const trafoDelta = trafoGroup.position.clone().sub(basePositions.get('transformer'));
+        trafoDelta.copy(trafoGroup.position).sub(basePositions.get('transformer'));
 
         for (const p of energyPulses) {
           p.phase = (p.phase + speed * clampedDt) % 1;
@@ -1106,10 +1009,12 @@ export function createWindTurbineModel() {
         }
       }
     }
+    return flowPose;
   }
 
   return {
     root,
+    accident,
     setViewMode,
     setSelectedPart,
     setFlowVisible,

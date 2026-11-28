@@ -1,19 +1,22 @@
 import * as THREE from 'three';
+import { createAccidentControls } from './wt-accident-controls.js?v=0.2.0';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { createStudio } from './wt-studio.js?v=0.2.0';
+import { createGraphicsSettings } from './wt-settings.js?v=0.2.0';
+import { createWindParticles } from './wt-wind-particles.js?v=0.2.0';
 import {
   TURBINE_SPECS,
   TURBINE_PARTS,
   TURBINE_TOUR_STEPS,
   computeTurbineTelemetry
-} from './wt-data.js';
-import { createWindTurbineModel } from './wt-model.js';
+} from './wt-data.js?v=0.2.0';
+import { createWindTurbineModel } from './wt-model.js?v=0.2.0';
 
 const DEFAULT_CAMERA = {
-  normal: { pos: [17.0, 3.8, 17.5], target: [0.0, -2.2, 0.4] },
+  normal: { pos: [21, 5, 23], target: [0, -1.3, 1.5] },
   cutaway: { pos: [8.6, 2.3, 4.6], target: [0.0, 0.15, 0.2] },
   xray: { pos: [10.5, 2.6, 7.6], target: [0.0, -0.4, 0.0] },
-  exploded: { pos: [17.2, 2.8, 17.0], target: [0.2, -1.8, 0.4] }
+  exploded: { pos: [23, 5, 25], target: [0, -2.8, 2.0] }
 };
 
 function init() {
@@ -25,22 +28,6 @@ function init() {
   // =========================================================================
   // THREE.JS RENDERER & STUDIO SCENE
   // =========================================================================
-  const renderer = new THREE.WebGLRenderer({
-    canvas,
-    antialias: true,
-    powerPreference: 'high-performance'
-  });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-  renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.08;
-  renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-
-  const scene = new THREE.Scene();
-  const pmrem = new THREE.PMREMGenerator(renderer);
-  const envTex = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-  scene.environment = envTex;
-
   const camera = new THREE.PerspectiveCamera(42, 16 / 9, 0.1, 140);
   camera.position.set(...DEFAULT_CAMERA.normal.pos);
 
@@ -48,62 +35,20 @@ function init() {
   controls.enableDamping = true;
   controls.dampingFactor = 0.07;
   controls.minDistance = 3.2;
-  controls.maxDistance = 42;
+  controls.maxDistance = 72;
   controls.maxPolarAngle = Math.PI * 0.68;
   controls.target.set(...DEFAULT_CAMERA.normal.target);
 
-  // Studio-Beleuchtung
-  const hemiLight = new THREE.HemisphereLight(0xe0f2fe, 0x334155, 1.0);
-  scene.add(hemiLight);
-
-  const keyLight = new THREE.DirectionalLight(0xffffff, 2.1);
-  keyLight.position.set(14, 18, 14);
-  keyLight.castShadow = true;
-  keyLight.shadow.mapSize.set(1024, 1024);
-  keyLight.shadow.camera.near = 2;
-  keyLight.shadow.camera.far = 55;
-  const d = 16;
-  keyLight.shadow.camera.left = -d;
-  keyLight.shadow.camera.right = d;
-  keyLight.shadow.camera.top = d;
-  keyLight.shadow.camera.bottom = -d;
-  keyLight.shadow.bias = -0.0005;
-  scene.add(keyLight);
-
-  const rimLight = new THREE.DirectionalLight(0x38bdf8, 0.9);
-  rimLight.position.set(-14, 8, -12);
-  scene.add(rimLight);
-
   const turbine = createWindTurbineModel();
-  scene.add(turbine.root);
-
-  // =========================================================================
-  // THEME SYNC (DARK / LIGHT)
-  // =========================================================================
-  let lastTheme = null;
-  function syncSceneTheme() {
-    const theme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
-    if (theme === lastTheme) return;
-    lastTheme = theme;
-    const isDark = theme === 'dark';
-    scene.background = new THREE.Color(isDark ? 0x0b1220 : 0xeef3fa);
-    scene.fog = new THREE.Fog(isDark ? 0x0b1220 : 0xeef3fa, 34, 78);
-    hemiLight.intensity = isDark ? 0.85 : 1.15;
-    keyLight.intensity = isDark ? 2.0 : 2.25;
-    rimLight.intensity = isDark ? 1.1 : 0.65;
-    renderer.toneMappingExposure = isDark ? 1.05 : 1.02;
-    turbine.applyTheme(theme);
-  }
-  syncSceneTheme();
-  window.addEventListener('arcade:theme-changed', syncSceneTheme);
-  const themeObs = new MutationObserver(syncSceneTheme);
-  themeObs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  const wind = createWindParticles(window);
+  const studio = createStudio(canvas, camera, turbine, wind);
+  const graphics = createGraphicsSettings(document, window, studio, wind);
 
   // =========================================================================
   // KAMERA-FLUG-INTERPOLATION
   // =========================================================================
   let camAnim = null;
-  function flyCamera(posArr, targetArr, duration = 0.85) {
+  function flyCamera(posArr, targetArr, duration = 0.85, overview = false) {
     camAnim = {
       startPos: camera.position.clone(),
       endPos: new THREE.Vector3(...posArr),
@@ -112,6 +57,11 @@ function init() {
       elapsed: 0,
       duration
     };
+    if (overview) fitOverview(camAnim.endPos, camAnim.endTarget);
+  }
+  function fitOverview(position, target) {
+    const scale = Math.min(1.65, Math.max(1, 0.86 / camera.aspect));
+    position.sub(target).multiplyScalar(scale).add(target);
   }
   controls.addEventListener('start', () => {
     camAnim = null;
@@ -131,6 +81,10 @@ function init() {
   };
 
   let telemetry = computeTurbineTelemetry(appState.windSpeed);
+  const accidentUI = createAccidentControls(document, turbine.accident, camera, controls, () => {
+    camAnim = null;
+    updateTelemetryUI();
+  });
 
   // =========================================================================
   // 3D-LABELS (PROJEKTION)
@@ -152,7 +106,7 @@ function init() {
 
   const projVec = new THREE.Vector3();
   function updateLabels() {
-    const show = appState.labelsVisible || appState.viewMode === 'exploded';
+    const show = appState.labelsVisible && !accidentUI.active;
     labelLayer.classList.toggle('is-visible', show);
     if (!show) return;
 
@@ -160,8 +114,7 @@ function init() {
     const h = viewport.clientHeight;
     for (const part of TURBINE_PARTS) {
       const el = labelEls.get(part.id);
-      const anchor = turbine.getPartWorldAnchor(part.id);
-      projVec.copy(anchor).project(camera);
+      turbine.getPartWorldAnchor(part.id, projVec).project(camera);
       const visible = projVec.z > -1 && projVec.z < 1;
       if (!visible) {
         el.style.opacity = '0';
@@ -190,6 +143,7 @@ function init() {
   });
 
   canvas.addEventListener('pointerup', e => {
+    if (accidentUI.active) return;
     if (Math.hypot(e.clientX - pointerDownPos.x, e.clientY - pointerDownPos.y) > 6) return;
     const rect = canvas.getBoundingClientRect();
     pointerNdc.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
@@ -369,27 +323,33 @@ function init() {
   }
 
   function setWindSpeed(val) {
+    accidentUI.repair();
     appState.windSpeed = Math.max(0, Math.min(TURBINE_SPECS.maxWindSpeed, Number(val) || 0));
     updateTelemetryUI();
   }
 
   function setViewMode(mode, shouldFly = true) {
+    if (mode === 'exploded') {
+      if (appState.tourActive) stopTour();
+      if (accidentUI.start(telemetry, appState.viewMode)) {
+        flyCamera(DEFAULT_CAMERA.exploded.pos, DEFAULT_CAMERA.exploded.target, 0.65, true);
+      }
+      return;
+    }
+    accidentUI.repair();
     appState.viewMode = mode;
     turbine.setViewMode(mode);
     document.querySelectorAll('[data-view-mode]').forEach(btn => {
       btn.classList.toggle('active', btn.dataset.viewMode === mode);
     });
-    if (mode === 'exploded') {
-      appState.labelsVisible = true;
-      if (elLabelsToggle) elLabelsToggle.classList.add('active');
-    }
     if (shouldFly && DEFAULT_CAMERA[mode]) {
-      flyCamera(DEFAULT_CAMERA[mode].pos, DEFAULT_CAMERA[mode].target);
+      flyCamera(DEFAULT_CAMERA[mode].pos, DEFAULT_CAMERA[mode].target, 0.85, mode === 'normal');
     }
     if (window.ArcadeAudio) window.ArcadeAudio.click();
   }
 
   function selectPart(partId, flyToPart = false) {
+    if (accidentUI.active) return;
     appState.selectedPart = partId;
     turbine.setSelectedPart(partId);
     const part = TURBINE_PARTS.find(p => p.id === partId);
@@ -397,7 +357,7 @@ function init() {
     if (!part) {
       elInspector.innerHTML = `
         <div class="wt-inspector-empty">
-          Klicke ein Bauteil im 3D-Modell oder aktiviere <strong>Labels</strong> / <strong>03 Exploded</strong>, um alle 12 Baugruppen im Detail zu untersuchen.
+          Klicke ein Bauteil im 3D-Modell oder aktiviere <strong>Labels</strong>, um alle 12 Baugruppen im Detail zu untersuchen.
         </div>`;
       return;
     }
@@ -458,7 +418,8 @@ function init() {
     setViewMode(step.viewMode, false);
     setWindSpeed(step.demoWind);
     selectPart(step.focusPart, false);
-    flyCamera(step.cameraPos, step.cameraTarget, 0.95);
+    if (step.step === 1) setFlow(true);
+    flyCamera(step.cameraPos, step.cameraTarget, 0.95, step.viewMode === 'normal');
 
     document.getElementById('wt-tour-end')?.addEventListener('click', () => stopTour());
     document.getElementById('wt-tour-prev')?.addEventListener('click', () => {
@@ -516,16 +477,21 @@ function init() {
     if (window.ArcadeAudio) window.ArcadeAudio.click();
   });
 
+  function setFlow(visible) {
+    appState.flowVisible = visible;
+    turbine.setFlowVisible(visible);
+    elFlowToggle?.classList.toggle('active', visible);
+    elFlowToggle?.setAttribute('aria-pressed', String(visible));
+  }
   elFlowToggle?.addEventListener('click', () => {
-    appState.flowVisible = !appState.flowVisible;
-    turbine.setFlowVisible(appState.flowVisible);
-    elFlowToggle.classList.toggle('active', appState.flowVisible);
+    setFlow(!appState.flowVisible);
     if (window.ArcadeAudio) window.ArcadeAudio.click();
   });
 
   document.getElementById('wt-btn-reset')?.addEventListener('click', () => {
+    accidentUI.repair();
     const cam = DEFAULT_CAMERA[appState.viewMode] || DEFAULT_CAMERA.normal;
-    flyCamera(cam.pos, cam.target);
+    flyCamera(cam.pos, cam.target, 0.85, appState.viewMode === 'normal');
     if (window.ArcadeAudio) window.ArcadeAudio.click();
   });
 
@@ -560,6 +526,8 @@ function init() {
   elDrawerBackdrop?.addEventListener('click', () => setDrawerOpen(false));
 
   window.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && graphics.close(true)) return;
+    if (e.key === 'Escape' && accidentUI.active) accidentUI.repair();
     if (e.key === 'Escape' && elPanelDrawer?.classList.contains('mobile-open')) {
       setDrawerOpen(false);
     }
@@ -589,9 +557,11 @@ function init() {
     const h = Math.max(1, viewport.clientHeight);
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
-    renderer.setSize(w, h, false);
+    studio.resize(w, h);
+    wind.resize();
   }
   handleResize();
+  fitOverview(camera.position, controls.target);
   const resizeObs = new ResizeObserver(handleResize);
   resizeObs.observe(viewport);
 
@@ -601,8 +571,10 @@ function init() {
   let lastTime = performance.now();
   function animate(now) {
     requestAnimationFrame(animate);
-    const dt = Math.min(0.25, (now - lastTime) / 1000);
+    const seconds = (now - lastTime) / 1000;
+    const dt = Math.min(0.25, seconds);
     lastTime = now;
+    if (document.hidden) return;
 
     if (camAnim) {
       camAnim.elapsed += dt;
@@ -614,8 +586,11 @@ function init() {
     }
 
     controls.update();
-    turbine.update(dt, telemetry);
-    renderer.render(scene, camera);
+    const pose = turbine.update(dt, telemetry);
+    accidentUI.frame();
+    wind.update(dt, telemetry, pose, camera, appState.flowVisible && !accidentUI.active);
+    studio.render(seconds);
+    graphics.frame(now);
     updateLabels();
   }
   requestAnimationFrame(animate);

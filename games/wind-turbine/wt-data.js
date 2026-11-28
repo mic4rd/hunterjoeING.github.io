@@ -96,9 +96,8 @@ export const TURBINE_PARTS = [
     energyStage: 'Windenergie → Rotationsenergie',
     spec: 'Länge 61,5 m · GFK/CFK-Verbund · Verwindung',
     description:
-      'Wie Flugzeugtragflächen erzeugen die aerodynamisch profilierten Rotorblätter Auftrieb. Der Druckunterschied zwischen Ober- und Unterseite versetzt den Rotor in Drehung – die Pitch-Regelung dreht die Blätter bei Starkwind aktiv aus dem Wind.',
+      'Wie Flugzeugtragflächen erzeugen die aerodynamisch profilierten Rotorblätter Auftrieb. Ein Teil dieser Kraft treibt den Rotor an. Die Luft gibt Energie ab und fließt hinter den Blättern langsamer weiter. Bei Starkwind dreht die Pitch-Regelung die Blätter aus dem Wind.',
     anchor: [0.0, 5.2, 4.1],
-    explodeOffset: [0, 0, 3.6],
     cameraPos: [14.5, 5.5, 16.5],
     cameraTarget: [0, 2.0, 3.5]
   },
@@ -113,7 +112,6 @@ export const TURBINE_PARTS = [
     description:
       'Die Rotornabe verbindet alle drei Blätter mit der Hauptwelle. Im Inneren sitzen drei unabhängige Pitch-Motoren, die jedes Blatt stufenlos zwischen 0° (Volllast) und 86° (Sturm-Fahnenstellung) verdrehen.',
     anchor: [0.0, 0.3, 4.7],
-    explodeOffset: [0, 0, 3.2],
     cameraPos: [7.2, 2.0, 9.2],
     cameraTarget: [0, 0.2, 4.0]
   },
@@ -128,7 +126,6 @@ export const TURBINE_PARTS = [
     description:
       'Die massive Langsamläufer-Welle überträgt das gewaltige Drehmoment des Rotors (über 2 MNm) auf das Getriebe und leitet Windlasten über das Hauptlager sicher in den Maschinenträger ab.',
     anchor: [0.0, 0.25, 2.25],
-    explodeOffset: [0, 0, 1.3],
     cameraPos: [6.4, 2.2, 5.4],
     cameraTarget: [0, 0.2, 2.1]
   },
@@ -143,7 +140,6 @@ export const TURBINE_PARTS = [
     description:
       'Da der Rotor nur mit ca. 15 U/min dreht, übersetzt das mehrstufige Getriebe die langsame, kraftvolle Drehung in eine hohe Drehzahl von über 1.300 U/min für den kompakten Generator.',
     anchor: [0.0, 0.35, 0.45],
-    explodeOffset: [0, 1.4, 0.2],
     cameraPos: [5.8, 2.4, 3.2],
     cameraTarget: [0, 0.25, 0.4]
   },
@@ -158,7 +154,6 @@ export const TURBINE_PARTS = [
     description:
       'Auf der schnellen Getriebe-Ausgangswelle sitzt eine hydraulische Scheibenbremse. Bei Sturm über 25 m/s oder Wartungsarbeiten arretiert sie den Triebstrang zuverlässig, nachdem die Blätter aus dem Wind gedreht wurden.',
     anchor: [0.0, 0.35, -0.75],
-    explodeOffset: [0, 1.9, -0.8],
     cameraPos: [5.4, 2.0, 0.8],
     cameraTarget: [0, 0.25, -0.8]
   },
@@ -173,7 +168,6 @@ export const TURBINE_PARTS = [
     description:
       'Die schnelle Welle verbindet Getriebe, Bremse und Generator über eine elastische Kupplung, die Schwingungen dämpft und vor Drehmomentspitzen bei Böen schützt.',
     anchor: [0.0, 0.25, -1.25],
-    explodeOffset: [0, 0.8, -1.25],
     cameraPos: [5.6, 1.8, -0.4],
     cameraTarget: [0, 0.25, -1.3]
   },
@@ -188,7 +182,6 @@ export const TURBINE_PARTS = [
     description:
       'Das Herzstück der Stromerzeugung: Im Generator rotiert ein Magnetfeld innerhalb von Kupferwicklungen (Stator) und induziert nach dem Faradayschen Gesetz dreiphasigen Wechselstrom.',
     anchor: [0.0, 0.35, -2.35],
-    explodeOffset: [0, 0.3, -2.6],
     cameraPos: [6.4, 2.3, -1.2],
     cameraTarget: [0, 0.3, -2.2]
   },
@@ -203,7 +196,6 @@ export const TURBINE_PARTS = [
     description:
       'Die aerodynamische Gondel schützt Getriebe, Generator und Steuerungselektronik vor Regen, Eis und UV-Strahlung. Auf dem Heck sitzt das Kühlsystem sowie das rote Hindernisfeuer für den Flugverkehr.',
     anchor: [0.0, 1.65, -0.8],
-    explodeOffset: [0, 3.2, -0.5],
     cameraPos: [9.5, 4.2, 6.2],
     cameraTarget: [0, 0.6, -0.2]
   },
@@ -218,7 +210,6 @@ export const TURBINE_PARTS = [
     description:
       'Die Sensorik auf dem Gondeldach misst permanent Windgeschwindigkeit und -richtung. Die Steuerung nutzt diese Daten für Pitch-Regelung, Windnachführung und automatische Sturmabschaltung.',
     anchor: [0.0, 2.3, -3.2],
-    explodeOffset: [0, 4.4, -2.2],
     cameraPos: [5.5, 4.0, -0.6],
     cameraTarget: [0, 2.0, -3.0]
   },
@@ -233,7 +224,6 @@ export const TURBINE_PARTS = [
     description:
       'Dreht der Wind, drehen vier elektrische Azimutmotoren über einen verzahnten Drehkranz die gesamte über 120 Tonnen schwere Gondel präzise in die neue Windrichtung.',
     anchor: [0.0, -1.35, 0.0],
-    explodeOffset: [0, -1.8, 0],
     cameraPos: [6.8, -0.3, 5.5],
     cameraTarget: [0, -1.3, 0]
   },
@@ -248,7 +238,6 @@ export const TURBINE_PARTS = [
     description:
       'In größerer Höhe weht der Wind stärker und gleichmäßiger. Im hohlen Turminneren verlaufen isolierte 3-Phasen-Leistungskabel, die den erzeugten Strom hinunter zum Umrichter führen.',
     anchor: [0.0, -5.8, 0.0],
-    explodeOffset: [0, -2.9, 0],
     cameraPos: [13.0, -4.5, 11.5],
     cameraTarget: [0, -5.5, 0]
   },
@@ -263,7 +252,6 @@ export const TURBINE_PARTS = [
     description:
       'Der Vollumrichter wandelt den frequenzvariablen Generatorstrom in sauberen 50-Hz-Wechselstrom um. Der Transformator hebt die Spannung auf 20 kV an, um ihn verlustarm ins Stromnetz einzuspeisen.',
     anchor: [2.2, -9.8, 0.2],
-    explodeOffset: [2.4, -3.5, 0.8],
     cameraPos: [10.0, -7.8, 9.2],
     cameraTarget: [1.4, -9.6, 0.2]
   }
@@ -277,10 +265,10 @@ export const TURBINE_TOUR_STEPS = [
     viewMode: 'normal',
     focusPart: 'blades',
     demoWind: 10.5,
-    cameraPos: [16.5, 4.2, 18.0],
-    cameraTarget: [0, 0.5, 1.5],
+    cameraPos: [26, 4.8, 14],
+    cameraTarget: [0, 0.9, 3.4],
     body:
-      'Strömende Luft umfließt das gewölbte Flügelprofil der drei 61,5 m langen Blätter. Wie bei einer Flugzeugtragfläche entsteht aerodynamischer Auftrieb, der den Rotor sanft in Drehung versetzt – die verfügbare Leistung wächst mit der dritten Potenz der Windgeschwindigkeit (P ~ v³).'
+      'Die Kugeln eines Stromfadens starten im gleichen Takt. Vor dem Rotor rücken sie näher zusammen, weil der Wind langsamer wird. Dahinter weitet sich der Luftstrom und dreht sich leicht entgegen dem Rotor. Nach Betz kann ein idealer Rotor höchstens 59,3 % der Windleistung nutzen.'
   },
   {
     step: 2,
@@ -332,14 +320,14 @@ export const TURBINE_TOUR_STEPS = [
   },
   {
     step: 6,
-    title: 'Explosionsansicht: Vom Turm ins Stromnetz',
-    badge: 'Gesamtsystem · Alle 12 Baugruppen',
-    viewMode: 'exploded',
+    title: 'Vom Turm ins Stromnetz',
+    badge: 'Stromschienen · Transformator',
+    viewMode: 'cutaway',
     focusPart: 'transformer',
     demoWind: 12.0,
-    cameraPos: [16.5, 2.5, 16.5],
-    cameraTarget: [0, -2.2, 0.2],
+    cameraPos: [11.5, -4.0, 10.2],
+    cameraTarget: [0.8, -6.6, 0.2],
     body:
-      'In der Explosionsansicht schweben alle 12 Hauptbaugruppen übersichtlich beschriftet im Raum. Der erzeugte Strom fließt über 3-Phasen-Leitungen durch den Turm zum Umrichter und 20-kV-Transformator am Fuß – bereit für rund 8.500 Haushalte!'
+      'Im geöffneten Turm zeigen die Lichtimpulse den Weg des Stroms. Drei Leitungen führen zum Umrichter am Turmfuß. Der Transformator hebt die Spannung für die Einspeisung ins Netz auf 20 kV.'
   }
 ];
