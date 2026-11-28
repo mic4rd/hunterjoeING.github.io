@@ -8,7 +8,7 @@ import {
 } from '../wt-airflow.js?v=0.2.0';
 import { orientFrame, contactFrame, slidePastBlades } from '../wt-blade-contact.js?v=0.2.0';
 
-import { INLET, OUTLET, STREAM_COUNT, createStreamSeeder } from '../wt-streams.js?v=0.2.0';
+import { INLET, OUTLET, INLET_RADIUS, createVolumeSeeder } from '../wt-streams.js?v=0.2.0';
 
 const operating = wind => setOperatingPoint({}, computeTurbineTelemetry(wind));
 const near = (a, b, tolerance) => assert.ok(Math.abs(a - b) < tolerance, `${a} vs ${b}`);
@@ -62,10 +62,10 @@ test('The wake rotates opposite to the negative Z rotor, then decays', () => {
 test('Wind, density, device limits and reduced motion govern the active count', () => {
   for (const [cores, memory, width, motion] of [[4, 8, 1200, false], [8, 4, 1200, false],
     [8, 8, 768, false], [8, 8, 1200, true]]) {
-    assert.equal(windBudget({ hardwareConcurrency: cores, deviceMemory: memory }, width, motion), 1500);
+    assert.equal(windBudget({ hardwareConcurrency: cores, deviceMemory: memory }, width, motion), 4600);
   }
-  assert.equal(windBudget({}, 769, false), 4000);
-  for (const cap of [1500, 4000]) {
+  assert.equal(windBudget({}, 769, false), 14400);
+  for (const cap of [4600, 14400]) {
     assert.equal(particleCount(0, 200, cap), 0);
     const breeze = particleCount(6, 100, cap);
     assert.ok(breeze >= 300 && breeze < particleCount(12, 100, cap));
@@ -84,9 +84,8 @@ test('Advection clamps long frames, recycles upstream and diverts wind around th
   near(field.positions[2], pose.bladeZ + INLET - operating(26).u * 0.05, 0.001);
   assert.ok(field.positions[6] > 0.75);
   assert.ok(field.speedRatio[3] < 1);
-  assert.equal(field.active[1], 0);
-  for (let k = 0; k < 140 && !field.active[1]; k++) field.update(0.05, turbine, pose, 4);
-  assert.ok(field.active[1] && field.positions[5] > pose.bladeZ + 3 * RADIUS);
+  assert.ok(field.positions[5] > pose.bladeZ + 3 * RADIUS);
+
 });
 
 test('A segment crossing both blade faces slides on its entry side', () => {
@@ -98,55 +97,58 @@ test('A segment crossing both blade faces slides on its entry side', () => {
   assert.ok(p.x < -0.29);
 });
 
-test('Fourteen core spokes and two bypass spokes launch together within 1.31 R', () => {
-  const seed = createStreamSeeder(sampleField), p = {};
+test('Continuous disk samples cover equal-area annuli, sectors, hub and bypass', () => {
+  const seed = createVolumeSeeder(sampleField), p = {}, bins = Array(8*12).fill(0);
   seed.prepare(operating(10.5));
-  let bypass = 0;
-  for (let i = 0; i < STREAM_COUNT; i++) {
-    seed.place(p, i, 0, ROTOR.z);
-    near(p.z, ROTOR.z + INLET, 1e-9);
-    const r = Math.hypot(p.x, p.y - ROTOR.y);
-    if (r > RADIUS) bypass++;
-    assert.ok(r <= 1.31 * RADIUS + 1e-9);
-    assert.ok(p.y > -8);
+  for (let i=0;i<9600;i++) {
+    seed.place(p,i,ROTOR.z,-20,false);
+    near(p.z, ROTOR.z+INLET,1e-8);
+    const dy = p.y-ROTOR.y, area = (p.x*p.x+dy*dy)/INLET_RADIUS**2;
+    assert.ok(area<1);
+    const azimuth = (Math.atan2(dy,p.x)/(2*Math.PI)+1)%1;
+    bins[12*Math.floor(area*8)+Math.floor(azimuth*12)]++;
   }
-  assert.equal(bypass, 2);
-  assert.equal(STREAM_COUNT, 16);
+  assert.ok(bins.every(n => n >= 85 && n <= 115), JSON.stringify(bins));
+  for (let i=0;i<10000;i++) {
+    seed.place(p,i,ROTOR.z,-11.165,false);
+    assert.ok(p.y >= -11.165 && Math.hypot(p.x,p.y-ROTOR.y)<=INLET_RADIUS+1e-6);
+  }
 });
 
-test('The first frame already resolves compressed spacing, widening and counter-rotation', () => {
-  const groups = 80, field = createAirflow(groups * STREAM_COUNT);
-  field.update(0, computeTurbineTelemetry(10.5), initialPose(), groups * STREAM_COUNT);
-  const samples = [];
-  for (let row = 0; row < groups; row++) {
-    const k = (row * STREAM_COUNT) * 3;
-    const x = field.positions[k], y = field.positions[k + 1] - ROTOR.y, z = field.positions[k + 2];
-    samples.push({ z, r: Math.hypot(x, y), theta: Math.atan2(y, x) });
-    near(field.positions[k + 5], z, 1e-5);
-    assert.ok(y + ROTOR.y > -11.26);
+test('The filled first frame has more slow core beads per axial slice, a wider wake and free bypass', () => {
+  const n=12000, field=createAirflow(n), tel=computeTurbineTelemetry(10.5);
+  field.update(0,tel,initialPose(),n);
+  const slices=[[],[]];
+  let bypass=0;
+  for (let i=0;i<n;i++) {
+    const x=field.positions[i*3], y=field.positions[i*3+1]-ROTOR.y;
+    const xi=(ROTOR.z-field.positions[i*3+2])/RADIUS;
+    const r=Math.hypot(x,y)/RADIUS;
+    if (Math.abs(xi+1.5)<0.35 && r<0.78) slices[0].push(r);
+    if (Math.abs(xi-1.5)<0.35 && field.speedRatio[i]<0.49) slices[1].push(r);
+    if (r>1.24 && field.speedRatio[i]>0.98) bypass++;
   }
-  const nearZ = s => samples.findIndex(p => p.z < ROTOR.z - s * RADIUS);
-  const before = nearZ(-1.4), behind = nearZ(1.4), gap = i => samples[i].z - samples[i+1].z;
-  assert.ok(gap(behind) < 0.55 * gap(before));
-  assert.ok(samples[behind].r > samples[before].r * 1.25);
-  assert.ok(samples[behind].theta > samples[before].theta + 0.2);
+  assert.ok(slices[0].length>200 && slices[1].length>slices[0].length*1.6);
+  assert.ok(Math.max(...slices[1])>Math.max(...slices[0])*1.4);
+  assert.ok(bypass>300);
 });
 
-test('Cohorts stay synchronized over two complete trips; blade contact flashes and fades', () => {
-  const tel = computeTurbineTelemetry(12), pose = initialPose(), n = 160, field = createAirflow(n);
-  field.update(0, tel, pose, n);
-  field.positions.set([-0.12, 4.6, pose.bladeZ + 0.22]);
-  let flashed = false, faded = false, launches = 0;
-  for (let i = 0; i < 620; i++) {
-    field.update(0.05, tel, pose, n);
-    if (field.contact[0] > 0.9) flashed = true;
-    if (flashed && field.contact[0] === 0) faded = true;
-    if (field.born[0]) {
+test('Independent recycling and contact light reuse all simulation buffers', () => {
+  const tel=computeTurbineTelemetry(12), pose=initialPose(), n=380, field=createAirflow(n);
+  const buffers=[field.positions,field.speedRatio,field.contact];
+  field.update(0,tel,pose,n);
+  field.positions.set([-0.12,4.6,pose.bladeZ+0.22]);
+  let flashed=false, faded=false, launches=0, lastZ=field.positions[5];
+  for (let i=0;i<620;i++) {
+    field.update(0.05,tel,pose,n);
+    if (field.contact[0]>0.9) flashed=true;
+    if (flashed && !field.contact[0]) faded=true;
+    if (field.positions[5]-lastZ>INLET) {
       launches++;
-      assert.equal(field.born[1], 1);
-      near(field.positions[2], field.positions[5], 1e-5);
+      assert.ok(Math.abs(field.positions[2]-field.positions[5])>0.1);
     }
+    lastZ=field.positions[5];
   }
-  assert.ok(flashed && faded);
-  assert.ok(launches >= 2);
+  assert.ok(flashed && faded && launches>=2);
+  [field.positions,field.speedRatio,field.contact].forEach((b,i)=>assert.equal(b,buffers[i]));
 });

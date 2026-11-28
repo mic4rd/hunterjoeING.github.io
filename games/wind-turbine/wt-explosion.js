@@ -49,7 +49,7 @@ export function createTurbineAccident({ root, groups, blades, spinning, brake, s
   const state = { phase: 'idle', elapsed: 0, rpm: 0, quip: '' };
   const sound = createSound(win);
   const bodies = [...blades, ...Array.from(groups).filter(([id]) =>
-    !['blades', 'tower', 'transformer'].includes(id)).map(([, node]) => node)].map(node => ({
+    !['blades', 'tower', 'serviceAccess', 'transformer'].includes(id)).map(([, node]) => node)].map(node => ({
     node, centre: new THREE.Vector3(), half: new THREE.Vector3(), pos: new THREE.Vector3(),
     vel: new THREE.Vector3(), spin: new THREE.Vector3(), rot: new THREE.Quaternion(),
     inverseParent: new THREE.Matrix4(), inverseRotation: new THREE.Quaternion(), resting: false

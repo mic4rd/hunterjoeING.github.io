@@ -7,9 +7,9 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 const OPAQUE = 1, OVERLAY = 2;
 const AO_LEVELS = [
   null,
-  { radius: 0.38, thickness: 0.16, intensity: 0.35 },
-  { radius: 0.52, thickness: 0.22, intensity: 0.72 },
-  { radius: 0.66, thickness: 0.28, intensity: 0.95 }
+  { radius: 0.38, thickness: 0.16, intensity: 0.70 },
+  { radius: 0.52, thickness: 0.22, intensity: 1.44 },
+  { radius: 0.66, thickness: 0.28, intensity: 1.90 }
 ];
 
 // Layer zero stays available for normal rendering, shadows and picking.
@@ -62,7 +62,7 @@ class OpaqueAO extends GTAOPass {
             total += weight;
           }
         }
-        gl_FragColor = vec4(vec3(1.0 - intensity * shadow / max(total, 0.25)), 1.0);
+        gl_FragColor = vec4(vec3(max(0.0, 1.0 - intensity * shadow / max(total, 0.25))), 1.0);
       }`;
     this.setLevel(level);
   }

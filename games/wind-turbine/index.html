@@ -6,7 +6,7 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https://upload.wikimedia.org; media-src 'self' data: blob:; connect-src 'self' https://hunterjoe-scores.hunterjoeing.workers.dev https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; object-src 'none'; base-uri 'self'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Windkraftanlage 3D – Interaktiver Explainer · HunterJoe Arcade</title>
-  <meta name="description" content="Interaktiver 3D-Explainer einer Windkraftanlage: Cutaway-Aufschnitt, X-Ray-Röntgenblick, 12 beschriftete Baugruppen, Windgeschwindigkeits-Regler, Live-Leistungskurve &amp; 6-Schritte-Tour." />
+  <meta name="description" content="Interaktiver 3D-Explainer einer Windkraftanlage: Cutaway-Aufschnitt, X-Ray-Röntgenblick, 13 beschriftete Baugruppen, Windgeschwindigkeits-Regler, Live-Leistungskurve &amp; 7-Schritte-Tour." />
   <meta name="robots" content="index, follow" />
   <meta name="theme-color" content="#F6F8FC" />
   <link rel="canonical" href="https://hunterjoeing.github.io/games/wind-turbine/" />
@@ -77,7 +77,7 @@
           <button type="button" class="wt-mode-btn" data-view-mode="exploded"><span class="wt-mode-num">03</span> Explosionsansicht</button>
         </div>
         <div class="wt-dock-group wt-dock-actions">
-          <button type="button" class="wt-chip-btn" id="wt-btn-labels" title="Alle 12 Bauteile beschriften">🏷️ Labels</button>
+          <button type="button" class="wt-chip-btn" id="wt-btn-labels" title="Alle 13 Bauteile beschriften">🏷️ Labels</button>
           <button type="button" class="wt-chip-btn active" id="wt-btn-flow" aria-pressed="true" title="Wind- &amp; Stromfluss anzeigen">💨 Fluss</button>
           <button type="button" class="wt-chip-btn" id="wt-btn-reset" title="Kamera zurücksetzen">↺ Reset</button>
           <button type="button" class="wt-chip-btn" id="wt-btn-settings" aria-label="Einstellungen" title="Einstellungen" aria-expanded="false" aria-controls="wt-settings"><span aria-hidden="true">⚙︎</span></button>
@@ -113,7 +113,7 @@
       <div class="wt-tour-card hidden" id="wt-tour-card" role="dialog" aria-label="Schritt-für-Schritt-Tour"></div>
 
       <div class="wt-bottom-bar">
-        <button type="button" class="wt-tour-launcher" id="wt-btn-tour">🧭 06 Schritt-für-Schritt-Tour</button>
+        <button type="button" class="wt-tour-launcher" id="wt-btn-tour">🧭 Tour in 7 Schritten</button>
         <button type="button" class="wt-mobile-toggle" id="wt-mobile-panel-toggle" aria-expanded="false">⚙️ Wind, Kurve &amp; Details</button>
         <div class="wt-orbit-hint">Ziehen: Drehen · Scroll/Pinch: Zoom · Klick: Bauteil prüfen</div>
       </div>
@@ -144,7 +144,7 @@
           <button type="button" class="wt-preset-btn" data-wind="12">Nennwind</button>
           <button type="button" class="wt-preset-btn" data-wind="26.5">Sturm</button>
         </div>
-        <p class="wt-chart-hint">Folge einem blauen Stromfaden. Wo die Kugeln enger stehen, fließt die Luft langsamer. Am Blattkontakt leuchten sie kurz auf.</p>
+        <p class="wt-chart-hint">Der blaue Kugelstrom zeigt die Luft vor und hinter dem Rotor. Im langsameren Nachlauf wird er breiter und dunkler. Am Blatt leuchten abgelenkte Kugeln kurz auf.</p>
         <div class="wt-status-pill" id="wt-status-badge" data-status="partial">Teillast (Optimal-Cp)</div>
       </div>
 

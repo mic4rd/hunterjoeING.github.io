@@ -76,7 +76,7 @@ test.describe('Ambient occlusion', () => {
     const blend = middle.at(-1);
     assert.equal(blend.target, opaque.target);
     assert.equal(blend.material.depthWrite, false);
-    assert.equal(blend.material.uniforms.intensity.value, 0.72);
+    assert.equal(blend.material.uniforms.intensity.value, 1.44);
     assert.equal(blend.material.uniforms.tDepth.value, normals.target.depthTexture);
     assert.equal(overlay.bg, null);
     assert.equal(normals.shadows || overlay.shadows, false);
@@ -113,7 +113,7 @@ test.describe('Ambient occlusion', () => {
   test('All four presets switch live, preserve overlay depth and release targets when off', () => {
     const { pipe, frame, draws } = fixture({ width: 390, cores: 4, memory: 2 });
     let previous, disposed = false;
-    for (const [level, radius, thickness, intensity] of [[1, 0.38, 0.16, 0.35], [2, 0.52, 0.22, 0.72], [3, 0.66, 0.28, 0.95]]) {
+    for (const [level, radius, thickness, intensity] of [[1, 0.38, 0.16, 0.70], [2, 0.52, 0.22, 1.44], [3, 0.66, 0.28, 1.90]]) {
       pipe.setAoLevel(level);
       const [opaque, normal, overlay] = frame();
       const post = draws.slice(draws.indexOf(normal) + 1, draws.indexOf(overlay));

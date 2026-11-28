@@ -23,7 +23,7 @@ test('Overrev and burst use the actual assemblies, bounce above the foundation a
   const floor = -11.26, bounds = new T.Box3(), origin = new T.Vector3();
   const blades = [], debris = [];
   model.root.traverse(o => {
-    if (o.isMesh && o.userData.partId && !['transformer', 'tower'].includes(o.userData.partId)) debris.push(o);
+    if (o.isMesh && o.userData.partId && !['transformer', 'tower', 'serviceAccess'].includes(o.userData.partId)) debris.push(o);
     if (o.userData.partId === 'blades' && o.geometry?.type === 'BufferGeometry') blades.push(o);
   });
   assert.equal(blades.length, 3);
@@ -71,10 +71,13 @@ test('Overrev and burst use the actual assemblies, bounce above the foundation a
   }
 });
 
-test('The six tour stations end at the transformer in cutaway and never trigger the accident', () => {
+test('The seven tour stations end at the transformer in cutaway and never trigger the accident', () => {
   const steps = data.TURBINE_TOUR_STEPS;
-  assert.equal(steps.length, 6);
+  assert.equal(steps.length, 7);
   assert.ok(steps.every(s => ['normal','cutaway','xray'].includes(s.viewMode)));
+  assert.equal(data.TURBINE_PARTS.length, 13);
+  assert.equal(steps.at(-2).focusPart, 'serviceAccess');
+  assert.equal(steps.at(-2).viewMode, 'cutaway');
   assert.equal(steps.at(-1).focusPart, 'transformer');
   assert.equal(steps.at(-1).viewMode, 'cutaway');
 });

@@ -1,71 +1,80 @@
 import { ROTOR, RADIUS } from './wt-rotor.js?v=0.2.0';
 
-export const INLET = 3.5 * RADIUS, OUTLET = -3 * RADIUS;
-const SLICES = 128;
-const rings = [
-  { radius: 0.23, spokes: 4, angle: Math.PI / 4 },
-  { radius: 0.53, spokes: 6, angle: Math.PI / 6 },
-  { radius: 0.76, spokes: 4, angle: Math.PI / 4 },
-  { radius: 1.31, spokes: 2, angle: Math.PI / 12 }
-];
-export const STREAM_COUNT = rings.reduce((sum, ring) => sum + ring.spokes, 0);
-const sparseLanes = [0, 4, 10, 14];
-export function lanesFor(count) {
-  return count < 64 ? 4 : count < 160 ? 8 : STREAM_COUNT;
-}
-export function streamIndex(column, lanes) {
-  return lanes === 4 ? sparseLanes[column] : column * (STREAM_COUNT / lanes);
+export const INLET = 3.5 * RADIUS, OUTLET = -3 * RADIUS, INLET_RADIUS = 1.30 * RADIUS;
+const SLICES = 96, BANDS = 40, STRIDE = SLICES + 1;
+const ds = (INLET - OUTLET) / SLICES;
+function interval(table, start, count, value) {
+  let low = 0, high = count;
+  while (high - low > 1) {
+    const mid = (low + high) >> 1;
+    if (value < table[start + mid]) high = mid;
+    else low = mid;
+  }
+  return low;
 }
 
-// Equal travel-time samples already show the compressed spacing and twist
-// in a still frame. After seeding, actual particles interact with the model.
-export function createStreamSeeder(sampleField) {
-  const streams = [], tables = [];
-  for (const ring of rings) {
-    const table = { radius: RADIUS * ring.radius, x: new Float64Array(SLICES + 1),
-      y: new Float64Array(SLICES + 1), time: new Float64Array(SLICES + 1) };
-    tables.push(table);
-    for (let j = 0; j < ring.spokes; j++) {
-      const angle = ring.angle + 2 * Math.PI * j / ring.spokes;
-      streams.push({ table, cos: Math.cos(angle), sin: Math.sin(angle) });
-    }
+function halton(index, base) {
+  let value = 0, weight = 1 / base;
+  while (index > 0) {
+    value += (index % base) * weight;
+    index = Math.floor(index / base);
+    weight /= base;
   }
+  return value;
+}
+
+// Low-discrepancy volume and inlet samples. Equal-area annuli cover the disk.
+// Initial occupancy is weighted by residence time: a slower path contains
+// more beads for the same inlet flux. Subsequent motion uses the live field.
+export function createVolumeSeeder(sample) {
+  const times = new Float64Array(BANDS * STRIDE), rx = times.slice(), ry = times.slice();
+  const cdf = new Float64Array(BANDS + 1);
   const unit = { a: NaN, lambda: NaN, u: 1 }, v = {};
-  const ds = (INLET - OUTLET) / SLICES;
+  let serial = 0;
   function prepare(op) {
     if (unit.a === op.a && unit.lambda === op.lambda) return;
-    unit.a = op.a;
-    unit.lambda = op.lambda;
-    for (const table of tables) {
-      const { x, y, time } = table;
-      x[0] = table.radius;
+    unit.a = op.a; unit.lambda = op.lambda;
+    for (let b = 0; b < BANDS; b++) {
+      const start = b * STRIDE;
+      rx[start] = INLET_RADIUS * Math.sqrt((b + 0.5) / BANDS);
       for (let i = 0; i < SLICES; i++) {
-        const s = -INLET + i * ds;
-        sampleField(v, x[i], y[i], s, unit);
+        const k = start + i, s = -INLET + i * ds;
+        sample(v, rx[k], ry[k], s, unit);
         const half = ds / (-2 * v.z);
-        sampleField(v, x[i] + half * v.x, y[i] + half * v.y, s + ds / 2, unit);
+        sample(v, rx[k] + half * v.x, ry[k] + half * v.y, s + ds / 2, unit);
         const dt = ds / -v.z;
-        time[i + 1] = time[i] + dt;
-        x[i + 1] = x[i] + v.x * dt;
-        y[i + 1] = y[i] + v.y * dt;
+        times[k + 1] = times[k] + dt;
+        rx[k + 1] = rx[k] + dt * v.x; ry[k + 1] = ry[k] + dt * v.y;
       }
+      cdf[b + 1] = cdf[b] + times[start + SLICES];
     }
   }
-  function period(lane) { return streams[lane].table.time[SLICES]; }
-  function place(out, lane, age, bladeZ) {
-    const { table, cos, sin } = streams[lane];
-    let lo = 0, hi = SLICES;
-    while (hi - lo > 1) {
-      const mid = (lo + hi) >> 1;
-      if (age < table.time[mid]) hi = mid;
-      else lo = mid;
+  function place(p, index, z, ground, initial) {
+    const id = initial ? index + 1 : ++serial;
+    const area = halton(id, 2), az = halton(id, 3);
+    let x = INLET_RADIUS * Math.sqrt(area), y = 0, distance = INLET;
+    if (initial) {
+      const weight = area * cdf[BANDS];
+      const band = interval(cdf, 0, BANDS, weight);
+      const start = band * STRIDE, duration = cdf[band + 1] - cdf[band];
+      const scale = Math.sqrt((band + (weight - cdf[band]) / duration) / (band + 0.5));
+      const age = halton(id, 5) * duration;
+      const slice = interval(times, start, SLICES, age);
+      const k = start + slice, f = (age - times[k]) / (times[k + 1] - times[k]);
+      x = (rx[k] + f * (rx[k + 1] - rx[k])) * scale;
+      y = (ry[k] + f * (ry[k + 1] - ry[k])) * scale;
+      distance -= (slice + f) * ds;
     }
-    const f = (age - table.time[lo]) / (table.time[hi] - table.time[lo]);
-    const x = table.x[lo] + (table.x[hi] - table.x[lo]) * f;
-    const y = table.y[lo] + (table.y[hi] - table.y[lo]) * f;
-    out.x = x * cos - y * sin;
-    out.y = ROTOR.y + x * sin + y * cos;
-    out.z = bladeZ + INLET - ds * (lo + f);
+    // Sample just the air above the ground, including the small clipped
+    // circular segment at the bottom of the bypass stream.
+    const r = Math.sqrt(x * x + y * y);
+    let angle = 2 * Math.PI * az;
+    if (r > ROTOR.y - ground) {
+      const limit = Math.asin((ROTOR.y - ground) / r);
+      angle = -limit + az * (Math.PI + 2 * limit) - Math.atan2(y, x);
+    }
+    const c = Math.cos(angle), s = Math.sin(angle);
+    p.x = x * c - y * s; p.y = ROTOR.y + x * s + y * c; p.z = z + distance;
   }
-  return { prepare, period, place };
+  return { prepare, place };
 }

@@ -3,44 +3,8 @@ import { createTurbineAccident } from './wt-explosion.js?v=0.2.0';
 import { TURBINE_PARTS } from './wt-data.js?v=0.2.0';
 import { ROTOR, bladeRings, spinnerRadius } from './wt-rotor.js?v=0.2.0';
 
-/**
- * Erzeugt ein prozedurales Zahnrad als ExtrudeGeometry.
- */
-function createGearGeometry(teeth, outerR, rootR, depth, boreR = 0.08) {
-  const shape = new THREE.Shape();
-  const step = (Math.PI * 2) / teeth;
-  for (let i = 0; i < teeth; i++) {
-    const a0 = i * step;
-    const a1 = a0 + step * 0.22;
-    const a2 = a0 + step * 0.34;
-    const a3 = a0 + step * 0.62;
-    const a4 = a0 + step * 0.74;
-    if (i === 0) shape.moveTo(Math.cos(a0) * rootR, Math.sin(a0) * rootR);
-    else shape.lineTo(Math.cos(a0) * rootR, Math.sin(a0) * rootR);
-    shape.lineTo(Math.cos(a1) * rootR, Math.sin(a1) * rootR);
-    shape.lineTo(Math.cos(a2) * outerR, Math.sin(a2) * outerR);
-    shape.lineTo(Math.cos(a3) * outerR, Math.sin(a3) * outerR);
-    shape.lineTo(Math.cos(a4) * rootR, Math.sin(a4) * rootR);
-  }
-  shape.closePath();
-
-  if (boreR > 0.01) {
-    const hole = new THREE.Path();
-    hole.absarc(0, 0, boreR, 0, Math.PI * 2, true);
-    shape.holes.push(hole);
-  }
-
-  const geo = new THREE.ExtrudeGeometry(shape, {
-    depth,
-    bevelEnabled: true,
-    bevelThickness: Math.min(0.025, depth * 0.14),
-    bevelSize: Math.min(0.02, (outerR - rootR) * 0.25),
-    bevelSegments: 2,
-    curveSegments: 6
-  });
-  geo.center();
-  return geo;
-}
+import { createGearbox, createBedplate, createYaw, sleeve } from './wt-gears.js?v=0.2.0';
+import { createAccess, createWindInstruments, TOWER_FLANGES } from './wt-service.js?v=0.2.0';
 
 /**
  * Erzeugt ein realistisch profiliertes, verwundenes Rotorblatt (NACA-ähnliches Profil)
@@ -362,6 +326,7 @@ export function createWindTurbineModel() {
 
   const mainShaftSpin = new THREE.Group();
   const shaftCyl = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.30, 2.3, 24), mats.steelBright);
+  shaftCyl.name = 'Hauptwelle';
   shaftCyl.rotation.x = Math.PI / 2;
   mainShaftSpin.add(shaftCyl);
 
@@ -372,59 +337,21 @@ export function createWindTurbineModel() {
   mainShaftGroup.add(mainShaftSpin);
 
   // Hauptlagerbock (stationär)
-  const bearingHousing = new THREE.Mesh(new THREE.CylinderGeometry(0.56, 0.56, 0.55, 24), mats.steelDark);
-  bearingHousing.rotation.x = Math.PI / 2;
+  const bearingHousing = new THREE.Mesh(sleeve(0.56, 0.308, 0.55), mats.steelDark);
   bearingHousing.position.z = 0.35;
   mainShaftGroup.add(bearingHousing);
 
-  const bearingFoot = new THREE.Mesh(new THREE.BoxGeometry(1.35, 0.72, 0.62), mats.steelDark);
-  bearingFoot.position.set(0, -0.52, 0.35);
+  const bearingFoot = new THREE.Mesh(new THREE.BoxGeometry(1.35, 0.38, 0.62), mats.steelDark);
+  bearingFoot.position.set(0, -0.75, 0.35);
   mainShaftGroup.add(bearingFoot);
 
   // =========================================================================
-  // 4. 3-STUFEN-PLANETENGETRIEBE (echte verzahnte Räder!)
+  // 4. PLANETENSTUFE UND ZWEI STIRNRADSTUFEN
   // =========================================================================
   const gearboxGroup = registerPartGroup('gearbox', new THREE.Group());
   gearboxGroup.position.set(0, 0.25, 0.45);
 
-  // Getriebe-Rückwand / Rahmen
-  const gbBack = new THREE.Mesh(new THREE.BoxGeometry(1.75, 1.65, 1.35), mats.steelDark.clone());
-  gbBack.position.set(-0.35, -0.05, 0);
-  gbBack.scale.set(0.55, 1, 1);
-  gearboxGroup.add(gbBack);
-
-  // Cutaway-Deckel des Getriebes (öffnet sich rechts +x)
-  const gbFrontCover = new THREE.Mesh(new THREE.BoxGeometry(0.88, 1.65, 1.35), mats.steelDark.clone());
-  gbFrontCover.position.set(0.44, -0.05, 0);
-  gearboxGroup.add(gbFrontCover);
-  shellCutawayMeshes.push(gbFrontCover);
-  registerXrayShell(gbFrontCover);
-
-  // Zahnrad 1: Großes Antriebsrad (Hauptwelle) – Teilkreis ~0.50
-  const gear1 = new THREE.Mesh(createGearGeometry(24, 0.54, 0.46, 0.26, 0.18), mats.gearSteel);
-  gear1.position.set(0, 0, 0.34);
-  gearboxGroup.add(gear1);
-
-  // Zahnrad 2: Zwischenrad – Teilkreis ~0.265 (Achsabstand sqrt(0.54^2+0.54^2) = 0.764)
-  const gear2 = new THREE.Mesh(createGearGeometry(13, 0.30, 0.23, 0.26, 0.09), mats.steelBright);
-  gear2.position.set(0.54, 0.54, 0.34);
-  gearboxGroup.add(gear2);
-
-  // Zwischenwelle + Stufe 2 Großrad (Teilkreis ~0.52)
-  const interShaftGeo = new THREE.CylinderGeometry(0.085, 0.085, 0.78, 16);
-  interShaftGeo.rotateX(Math.PI / 2);
-  const interShaft = new THREE.Mesh(interShaftGeo, mats.steelBright);
-  interShaft.position.set(0.54, 0.54, 0.04);
-  gearboxGroup.add(interShaft);
-
-  const gear3 = new THREE.Mesh(createGearGeometry(22, 0.56, 0.48, 0.24, 0.09), mats.gearSteel);
-  gear3.position.set(0.54, 0.54, -0.26);
-  gearboxGroup.add(gear3);
-
-  // Zahnrad 4: Schnelles Ausgangsritzel – Teilkreis ~0.245 (Achsabstand 0.764)
-  const gear4 = new THREE.Mesh(createGearGeometry(11, 0.28, 0.21, 0.26, 0.08), mats.steelBright);
-  gear4.position.set(0, 0, -0.26);
-  gearboxGroup.add(gear4);
+  const updateGears = createGearbox(gearboxGroup, mats, registerXrayShell, shellCutawayMeshes);
 
   // =========================================================================
   // 5. SCHEIBENBREMSE (Geometrie vorgekippt -> rotation.z dreht exakt um Z-Achse!)
@@ -432,12 +359,20 @@ export function createWindTurbineModel() {
   const brakeGroup = registerPartGroup('brake', new THREE.Group());
   brakeGroup.position.set(0, 0.25, -0.78);
 
-  const brakeDiscGeo = new THREE.CylinderGeometry(0.46, 0.46, 0.08, 32);
-  brakeDiscGeo.rotateX(Math.PI / 2);
+  const brakeDiscGeo = sleeve(0.46, 0.111, 0.08);
   const brakeDisc = new THREE.Mesh(brakeDiscGeo, mats.steelBright);
+  brakeDisc.name = 'Bremsscheibe';
   brakeGroup.add(brakeDisc);
 
-  const brakeCaliper = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.36, 0.24), mats.brakeRed);
+  const brakeCaliper = new THREE.Group();
+  for (const z of [-0.087, 0.087]) {
+    const pad = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.20, 0.086), mats.brakeRed);
+    pad.position.z = z;
+    brakeCaliper.add(pad);
+  }
+  const bridge = new THREE.Mesh(new THREE.BoxGeometry(0.060, 0.20, 0.26), mats.brakeRed);
+  bridge.position.x = 0.17;
+  brakeCaliper.add(bridge);
   brakeCaliper.position.set(0.38, 0.24, 0);
   brakeGroup.add(brakeCaliper);
 
@@ -447,15 +382,17 @@ export function createWindTurbineModel() {
   const highSpeedGroup = registerPartGroup('highSpeedShaft', new THREE.Group());
   highSpeedGroup.position.set(0, 0.25, -1.18);
 
-  const hsShaftGeo = new THREE.CylinderGeometry(0.11, 0.11, 1.75, 20);
+  const hsShaftGeo = new THREE.CylinderGeometry(0.11, 0.11, 1.335, 24);
   hsShaftGeo.rotateX(Math.PI / 2);
   const hsShaft = new THREE.Mesh(hsShaftGeo, mats.steelBright);
+  hsShaft.name = 'Schnelle Welle';
+  hsShaft.position.z = 0.2075;
   highSpeedGroup.add(hsShaft);
 
-  const hsCouplingGeo = new THREE.CylinderGeometry(0.22, 0.22, 0.28, 18);
-  hsCouplingGeo.rotateX(Math.PI / 2);
+  const hsCouplingGeo = sleeve(0.22, 0.111, 0.28);
   const hsCoupling = new THREE.Mesh(hsCouplingGeo, mats.gearGold);
-  hsCoupling.position.z = -0.35;
+  hsCoupling.name = 'Kupplung';
+  hsCoupling.position.z = -0.07;
   highSpeedGroup.add(hsCoupling);
 
   // =========================================================================
@@ -466,7 +403,7 @@ export function createWindTurbineModel() {
 
   // Generator-Hintergehäuse (links -x immer sichtbar)
   const genShellBack = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.86, 0.86, 1.85, 28, 1, false, Math.PI, Math.PI),
+    new THREE.CylinderGeometry(0.86, 0.86, 1.85, 28, 1, true, Math.PI, Math.PI),
     mats.steelDark.clone()
   );
   genShellBack.rotation.x = Math.PI / 2;
@@ -475,7 +412,7 @@ export function createWindTurbineModel() {
 
   // Generator-Cutaway-Halbschale (rechts +x öffnet im Cutaway!)
   const genShellFront = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.86, 0.86, 1.85, 28, 1, false, 0, Math.PI),
+    new THREE.CylinderGeometry(0.86, 0.86, 1.85, 28, 1, true, 0, Math.PI),
     mats.steelDark.clone()
   );
   genShellFront.rotation.x = Math.PI / 2;
@@ -496,6 +433,7 @@ export function createWindTurbineModel() {
 
   // Rotierender elektromagnetischer Generator-Läufer
   const genRotorGroup = new THREE.Group();
+  genRotorGroup.name = 'Generatorläufer';
   const genRotorCore = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 1.56, 20), mats.generatorRotor);
   genRotorCore.rotation.x = Math.PI / 2;
   genRotorGroup.add(genRotorCore);
@@ -515,7 +453,8 @@ export function createWindTurbineModel() {
   nacelleGroup.position.set(0, 0.25, -0.3);
 
   // Maschinenträger / Grundrahmen (bleibt sichtbar als stabile Plattform)
-  const bedplate = new THREE.Mesh(new THREE.BoxGeometry(2.35, 0.32, 6.75), mats.steelDark);
+  const bedplate = createBedplate(mats.steelDark);
+  bedplate.name = 'Maschinenträger';
   bedplate.position.set(0, -1.16, -0.2);
   nacelleGroup.add(bedplate);
 
@@ -592,37 +531,8 @@ export function createWindTurbineModel() {
   // 9. ANEMOMETER & WINDFAHNE
   // =========================================================================
   const anemoGroup = registerPartGroup('anemometer', new THREE.Group());
-  anemoGroup.position.set(0.45, 2.05, -3.25);
-
-  const anemoMast = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.05, 0.95, 12), mats.steelBright);
-  anemoMast.position.y = -0.15;
-  anemoGroup.add(anemoMast);
-
-  const anemoCross = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.05, 0.05), mats.steelBright);
-  anemoCross.position.y = 0.25;
-  anemoGroup.add(anemoCross);
-
-  const anemoSpinner = new THREE.Group();
-  anemoSpinner.position.set(0.42, 0.36, 0);
-  for (let i = 0; i < 3; i++) {
-    const a = (i * Math.PI * 2) / 3;
-    const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.28, 8), mats.steelBright);
-    arm.rotation.z = Math.PI / 2;
-    arm.rotation.y = a;
-    arm.position.set(Math.cos(a) * 0.14, 0, Math.sin(a) * 0.14);
-    anemoSpinner.add(arm);
-
-    const cup = new THREE.Mesh(new THREE.SphereGeometry(0.065, 12, 10, 0, Math.PI), mats.brakeRed);
-    cup.position.set(Math.cos(a) * 0.28, 0, Math.sin(a) * 0.28);
-    cup.rotation.y = a + Math.PI / 2;
-    anemoSpinner.add(cup);
-  }
-  anemoGroup.add(anemoSpinner);
-
-  // Windfahne
-  const vane = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.24, 0.44), mats.gearGold);
-  vane.position.set(-0.42, 0.38, -0.1);
-  anemoGroup.add(vane);
+  anemoGroup.position.set(0.10, 1.65, -3.64);
+  const updateInstruments = createWindInstruments(anemoGroup, mats);
 
   // =========================================================================
   // 10. AZIMUTANTRIEB (YAW RING + 4 MOTOREN)
@@ -630,25 +540,7 @@ export function createWindTurbineModel() {
   const yawGroup = registerPartGroup('yawDrive', new THREE.Group());
   yawGroup.position.set(0, -1.32, 0);
 
-  const yawRing = new THREE.Mesh(createGearGeometry(34, 1.15, 1.04, 0.34, 0.72), mats.gearGold);
-  yawRing.rotation.x = Math.PI / 2;
-  yawGroup.add(yawRing);
-
-  const yawPinions = [];
-  for (let i = 0; i < 4; i++) {
-    const a = (i * Math.PI) / 2 + Math.PI / 4;
-    const mx = Math.cos(a) * 0.88;
-    const mz = Math.sin(a) * 0.88;
-    const motor = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 0.62, 14), mats.generatorRotor);
-    motor.position.set(mx, 0.32, mz);
-    yawGroup.add(motor);
-
-    const pin = new THREE.Mesh(createGearGeometry(10, 0.17, 0.13, 0.34, 0.04), mats.steelBright);
-    pin.rotation.x = Math.PI / 2;
-    pin.position.set(mx * 0.82, 0, mz * 0.82);
-    yawGroup.add(pin);
-    yawPinions.push(pin);
-  }
+  createYaw(yawGroup, mats);
 
   // =========================================================================
   // 11. STAHLROHRTURM & 3-PHASEN-LEITUNGEN
@@ -658,7 +550,7 @@ export function createWindTurbineModel() {
 
   // Rückhälfte des Turms (bleibt sichtbar)
   const towerBack = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.95, 1.55, 9.6, 32, 1, false, Math.PI * 0.65, Math.PI * 1.15),
+    new THREE.CylinderGeometry(0.95, 1.55, 9.6, 32, 1, true, Math.PI * 0.65, Math.PI * 1.15),
     mats.towerMat.clone()
   );
   towerGroup.add(towerBack);
@@ -666,15 +558,21 @@ export function createWindTurbineModel() {
 
   // Vorderes Turm-Segment (öffnet sich im Cutaway um Stromkabel zu zeigen!)
   const towerFront = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.95, 1.55, 9.6, 32, 1, false, -Math.PI * 0.2, Math.PI * 0.85),
+    new THREE.CylinderGeometry(0.95, 1.55, 9.6, 32, 1, true, -Math.PI * 0.2, Math.PI * 0.85),
     mats.towerCutaway.clone()
   );
   towerGroup.add(towerFront);
   shellCutawayMeshes.push(towerFront);
   registerXrayShell(towerFront);
 
+  const towerFlange = new THREE.Mesh(sleeve(0.99, 0.70, 0.02), mats.steelBright);
+  towerFlange.name = 'Turmkopfflansch';
+  towerFlange.rotation.x = -Math.PI / 2;
+  towerFlange.position.y = 4.81;
+  towerGroup.add(towerFlange);
+
   // Flanschringe am Turm
-  [-2.6, 0.4, 3.2].forEach(ry => {
+  TOWER_FLANGES.forEach(ry => {
     const rad = 1.25 - (ry / 9.6) * 0.6;
     const ring = new THREE.Mesh(new THREE.TorusGeometry(rad + 0.04, 0.055, 10, 32), mats.steelBright);
     ring.rotation.x = Math.PI / 2;
@@ -694,9 +592,9 @@ export function createWindTurbineModel() {
   foundation.position.y = -4.95;
   towerGroup.add(foundation);
 
-  const door = new THREE.Mesh(new THREE.BoxGeometry(0.56, 1.05, 0.16), mats.steelDark);
-  door.position.set(0, -4.15, 1.54);
-  towerGroup.add(door);
+  const accessGroup = registerPartGroup('serviceAccess', new THREE.Group());
+  accessGroup.position.copy(towerGroup.position);
+  const updateAccess = createAccess(accessGroup, mats, registerXrayShell, shellCutawayMeshes);
 
   // Animierte Strom-Impulse (fließen im Turm nach unten & zum Transformator!)
   const energyPulseGroup = new THREE.Group();
@@ -788,7 +686,6 @@ export function createWindTurbineModel() {
     xrayTarget: 0,
     xrayCurrent: 0,
     rotorAngle: 0,
-    anemoAngle: 0,
     currentPitchRad: 0,
     selectedPart: null,
     showFlow: true,
@@ -926,14 +823,7 @@ export function createWindTurbineModel() {
     bladesSpinGroup.rotation.z = state.rotorAngle;
     mainShaftSpin.rotation.z = state.rotorAngle;
 
-    // Echte Gegendrehung & Drehzahlübersetzung der Getrieberäder (24:13 und 22:11)
-    gear1.rotation.z = state.rotorAngle;
-    const interAngle = -state.rotorAngle * (24 / 13);
-    gear2.rotation.z = interAngle;
-    interShaft.rotation.z = interAngle;
-    gear3.rotation.z = interAngle;
-    const highSpeedAngle = state.rotorAngle * (24 / 13) * (22 / 11);
-    gear4.rotation.z = highSpeedAngle;
+    const highSpeedAngle = updateGears(state.rotorAngle);
     brakeDisc.rotation.z = highSpeedAngle;
     hsShaft.rotation.z = highSpeedAngle;
     hsCoupling.rotation.z = highSpeedAngle;
@@ -946,11 +836,8 @@ export function createWindTurbineModel() {
       pivot.rotation.y = state.currentPitchRad;
     }
 
-    // 6) Anemometer rotiert proportional zum Wind (steht bei 0,0 m/s still)
-    if (telemetry.windSpeed > 0.05) {
-      state.anemoAngle += (0.2 + telemetry.windSpeed * 0.65) * clampedDt;
-    }
-    anemoSpinner.rotation.y = state.anemoAngle;
+    updateInstruments(clampedDt, telemetry.windSpeed, state.time);
+    updateAccess(clampedDt, useXray || state.cutawayCurrent > 0.1, state.cutawayCurrent);
 
     // 7) Generator-Induktionsglühen & Bremsen-Status
     const loadRatio = telemetry.powerMW / 3.6;

@@ -49,7 +49,7 @@ for (const speed of [7, 12, 20, 26.5]) {
     const pose = turbine.update(0, tel);
     field.update(0, tel, pose, count);
     // Targeted approaches along the leading shell, tower and all blade spans,
-    // in addition to the regularly spaced stream pulses.
+    // in addition to the continuously seeded inlet disk.
     for (let i = 0; i < 100; i++) {
       const phi = i % 3 * 2 * Math.PI / 3, r = 1.25 + (i / 100) * 7.9;
       field.positions.set([-r * Math.sin(phi), 0.25 + r * Math.cos(phi), pose.bladeZ + 0.27], i * 3);
@@ -144,11 +144,11 @@ test('One instanced batch reuses its buffers across density, calm, visibility an
   const pose = initialPose(), mesh = view.mesh, matrices = mesh.instanceMatrix, colors = mesh.instanceColor;
   view.setDensity(200); view.update(1/60, tel, pose, camera, true);
   assert.ok(mesh.isInstancedMesh && mesh.userData.windParticle && !mesh.castShadow);
-  assert.ok(mesh.count > 1000 && mesh.count <= 4000);
+  assert.ok(mesh.count > 8000 && mesh.count <= 14400);
   assert.equal(matrices.array[15], 1);
   assert.ok(matrices.array[0] > 0 && matrices.array[0] <= BEAD_RADIUS + 1e-7);
   win.innerWidth = 390; view.resize(); view.update(1/60, tel, pose, camera, true);
-  assert.ok(mesh.count > 400 && mesh.count <= 1500);
+  assert.ok(mesh.count > 2500 && mesh.count <= 4600);
   view.update(1/60, tel, pose, camera, false);
   assert.equal(mesh.count, 0);
   view.update(1/60, computeTurbineTelemetry(0), pose, camera, true);
@@ -157,28 +157,7 @@ test('One instanced batch reuses its buffers across density, calm, visibility an
   assert.equal(mesh.instanceColor, colors);
 });
 
-test('Fixed ghost snapshots follow the travelled path across variable frame times and clear on respawn', async () => {
-  const { createWindTrail } = await import('../wt-wind-particles.js?v=0.2.0');
-  const trail = createWindTrail(1), out = new T.Vector3();
-  const field = { positions: new Float32Array(3), born: new Uint8Array([1]) };
-  trail.update(0, field, 1); field.born[0] = 0;
-  let time = 0;
-  for (const dt of [0.03, 0.05, 0.016, 0.05, 0.04, 0.015]) {
-    time += dt;
-    field.positions[2] = time * -8;
-    trail.update(dt, field, 1);
-    if (time < 0.12) continue;
-    for (const depth of [1, 2]) {
-      assert.equal(trail.read(out, 0, depth), out);
-      assert.ok(Math.abs(out.z + (time - 0.045 * depth) * 8) < 1e-6);
-    }
-  }
-  field.born[0] = 1; field.positions[2] = 34;
-  trail.update(0.016, field, 1);
-  assert.equal(trail.read(out, 0, 2).z, 34);
-});
-
-test('Visible trail beads and heads clear the current rendered blade sections and floor', () => {
+test('The dense rendered volume clears the current blade surfaces and floor', () => {
   const model = build(), tel = computeTurbineTelemetry(12), camera = new T.PerspectiveCamera();
   camera.position.set(21, 5, 23);
   const view = createWindParticles({ innerWidth: 1280, navigator: {}, matchMedia: () => ({ matches:false, addEventListener(){} }) });
@@ -209,4 +188,24 @@ test('Visible trail beads and heads clear the current rendered blade sections an
     }
   }
   assert.ok(encounters > 100);
+});
+
+test('Warm volume updates allocate no typed arrays during flight, recycling or density changes', () => {
+  const view = createWindParticles({ innerWidth: 1280, navigator: {}, matchMedia: () => ({matches:false,addEventListener(){}}) });
+  const tel = computeTurbineTelemetry(12), camera = new T.PerspectiveCamera(), pose = initialPose();
+  view.update(0, tel, pose, camera, true);
+  const saved = new Map();
+  try {
+    for (const type of ['Float32Array','Float64Array','Uint8Array','Uint16Array','Uint32Array']) {
+      saved.set(type, globalThis[type]);
+      globalThis[type] = new Proxy(globalThis[type], { construct() { throw Error(type+' in animation loop'); } });
+    }
+    for (let i=0;i<320;i++) {
+      if (i===170) view.setDensity(125);
+      pose.angle-=0.033;
+      view.update(0.05, tel, pose, camera, true);
+    }
+  } finally {
+    for (const [type,original] of saved) globalThis[type]=original;
+  }
 });

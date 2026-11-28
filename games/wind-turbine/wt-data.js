@@ -1,4 +1,4 @@
-// Windkraftanlage 3D – Physik-Modell, Bauteile-Katalog & 6-Schritte-Tour
+// Windkraftanlage 3D – Physik-Modell, Bauteile-Katalog & 7-Schritte-Tour
 export const TURBINE_SPECS = {
   ratedPowerMW: 3.6,
   rotorDiameterM: 126,
@@ -132,13 +132,13 @@ export const TURBINE_PARTS = [
   {
     id: 'gearbox',
     number: '04',
-    name: '3-Stufen-Planetengetriebe',
-    shortLabel: 'Getriebe (1:92)',
+    name: 'Planetenstufe & zwei Stirnradstufen',
+    shortLabel: 'Getriebe 1:92',
     category: 'Triebstrang',
     energyStage: 'Drehzahl-Übersetzung 15 → 1.360 U/min',
     spec: 'Übersetzung 1 : 92 · Zwangsumlaufschmierung',
     description:
-      'Da der Rotor nur mit ca. 15 U/min dreht, übersetzt das mehrstufige Getriebe die langsame, kraftvolle Drehung in eine hohe Drehzahl von über 1.300 U/min für den kompakten Generator.',
+      'Die Rotorwelle treibt den Planetenträger an. Vier Planeten wälzen sich im festen Hohlrad ab und treiben das Sonnenrad. Zwei schrägverzahnte Stirnradpaare erhöhen die Drehzahl weiter.',
     anchor: [0.0, 0.35, 0.45],
     cameraPos: [5.8, 2.4, 3.2],
     cameraTarget: [0, 0.25, 0.4]
@@ -208,7 +208,7 @@ export const TURBINE_PARTS = [
     energyStage: 'Echtzeit-Windmessung (m/s & Richtung)',
     spec: 'Schalenstern-Anemometer + Richtungssensor',
     description:
-      'Die Sensorik auf dem Gondeldach misst permanent Windgeschwindigkeit und -richtung. Die Steuerung nutzt diese Daten für Pitch-Regelung, Windnachführung und automatische Sturmabschaltung.',
+      'Auf dem hinteren Messmast dreht der Wind drei halbkugelige Schalen. Daneben richtet sich die Spitze der Windfahne gegen den Wind aus. Die Steuerung nutzt diese Daten für Pitch-Regelung, Windnachführung und automatische Sturmabschaltung.',
     anchor: [0.0, 2.3, -3.2],
     cameraPos: [5.5, 4.0, -0.6],
     cameraTarget: [0, 2.0, -3.0]
@@ -222,7 +222,7 @@ export const TURBINE_PARTS = [
     energyStage: '360°-Ausrichtung in den Wind',
     spec: 'Verzahnter Großwälzlager-Kranz · 4× E-Motoren',
     description:
-      'Dreht der Wind, drehen vier elektrische Azimutmotoren über einen verzahnten Drehkranz die gesamte über 120 Tonnen schwere Gondel präzise in die neue Windrichtung.',
+      'Dreht der Wind, führen vier Getriebemotoren die Gondel nach. Ihre Ritzel greifen von außen in den festen Zahnkranz am Turmkopf. Im gezeigten Betrieb bleibt die Windrichtung konstant.',
     anchor: [0.0, -1.35, 0.0],
     cameraPos: [6.8, -0.3, 5.5],
     cameraTarget: [0, -1.3, 0]
@@ -254,6 +254,13 @@ export const TURBINE_PARTS = [
     anchor: [2.2, -9.8, 0.2],
     cameraPos: [10.0, -7.8, 9.2],
     cameraTarget: [1.4, -9.6, 0.2]
+  },
+  {
+    id: 'serviceAccess', number: '13', name: 'Aufstieg im Turm', shortLabel: 'Leiter & Service-Lift',
+    category: 'Wartung', energyStage: 'Zugang zum Maschinenhaus',
+    spec: 'Befahranlage · Steigschutzschiene · Ruhepodeste',
+    description: 'Hinter der Turmtür liegt das Eingangspodest. Der Service-Lift bringt Personen und Werkzeug nach oben. Zusätzlich führt eine feste Leiter mit Steigschutzschiene an den Ruhepodesten vorbei.',
+    anchor: [0.23,-7.2,-0.26], cameraPos: [4.4,-6.7,4.3], cameraTarget: [0,-7.1,0]
   }
 ];
 
@@ -265,10 +272,10 @@ export const TURBINE_TOUR_STEPS = [
     viewMode: 'normal',
     focusPart: 'blades',
     demoWind: 10.5,
-    cameraPos: [26, 4.8, 14],
+    cameraPos: [32, 5.5, 14],
     cameraTarget: [0, 0.9, 3.4],
     body:
-      'Die Kugeln eines Stromfadens starten im gleichen Takt. Vor dem Rotor rücken sie näher zusammen, weil der Wind langsamer wird. Dahinter weitet sich der Luftstrom und dreht sich leicht entgegen dem Rotor. Nach Betz kann ein idealer Rotor höchstens 59,3 % der Windleistung nutzen.'
+      'Die blauen Kugeln füllen den anströmenden Luftquerschnitt. Vor dem Rotor bremst die Luft ab. Dahinter weitet sich der Luftstrom und dreht sich leicht entgegen dem Rotor. Nach Betz kann ein idealer Rotor höchstens 59,3 % der Windleistung nutzen.'
   },
   {
     step: 2,
@@ -289,10 +296,10 @@ export const TURBINE_TOUR_STEPS = [
     viewMode: 'cutaway',
     focusPart: 'gearbox',
     demoWind: 11.0,
-    cameraPos: [6.0, 2.2, 3.8],
+    cameraPos: [3.9, 1.5, 3.0],
     cameraTarget: [0, 0.25, 0.6],
     body:
-      'Im Aufschnitt der Gondel zeigt sich der Triebstrang: Der Rotor dreht kraftvoll mit nur ca. 14 U/min. Das mehrstufige Planeten- und Stirnradgetriebe steigert diese Drehzahl um das 92-Fache auf über 1.250 U/min an der schnellen Ausgangswelle.'
+      'Folge der Hauptwelle zum goldenen Planetenträger. Seine vier Planeten umlaufen das Sonnenrad und treiben es an. Dahinter kämmen zwei Stirnradpaare. Zusammen machen sie aus einer Rotorumdrehung 92 Umdrehungen der Generatorwelle.'
   },
   {
     step: 4,
@@ -316,10 +323,18 @@ export const TURBINE_TOUR_STEPS = [
     cameraPos: [7.6, 0.8, 5.2],
     cameraTarget: [0, -0.6, -0.5],
     body:
-      'Das Anemometer auf dem Heck erkennt Böen und Richtungswechsel. Vier Azimutmotoren drehen die Gondel über den Zahnkranz in den Wind. Übersteigt der Sturm 25 m/s (wie jetzt eingestellt!), gehen die Blätter in Fahnenstellung und die rote Scheibenbremse greift ein.'
+      'Der Schalenstern misst die Windgeschwindigkeit, die Fahne zeigt die Richtung. Vier Azimutmotoren drehen die Gondel über den Zahnkranz in den Wind. Übersteigt der Sturm 25 m/s (wie jetzt eingestellt!), gehen die Blätter in Fahnenstellung und die rote Scheibenbremse greift ein.'
   },
   {
     step: 6,
+    title: 'Aufstieg für Techniker',
+    badge: 'Wartung · Zugang zum Maschinenhaus',
+    viewMode: 'cutaway', focusPart: 'serviceAccess', demoWind: 9,
+    cameraPos: [9.3,-5.9,9.4], cameraTarget: [0,-6.1,0],
+    body: 'Hinter der Turmtür beginnt der Aufstieg. Der Service-Lift fährt Personen und Werkzeug nach oben. Als Rückfallebene dient die Leiter mit Steigschutzschiene, in die sich Techniker mit dem Läufer am Auffanggurt einklinken. An den Segmentflanschen liegen Ruhepodeste.'
+  },
+  {
+    step: 7,
     title: 'Vom Turm ins Stromnetz',
     badge: 'Stromschienen · Transformator',
     viewMode: 'cutaway',

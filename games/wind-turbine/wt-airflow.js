@@ -3,21 +3,21 @@ import { ROTOR, RADIUS, spinnerRadius } from './wt-rotor.js?v=0.2.0';
 import { contactFrame, orientFrame, slidePastBlades } from './wt-blade-contact.js?v=0.2.0';
 import { densityPercent } from './wt-settings.js?v=0.2.0';
 
-import { lanesFor, streamIndex, OUTLET, createStreamSeeder } from './wt-streams.js?v=0.2.0';
+import { OUTLET, createVolumeSeeder } from './wt-streams.js?v=0.2.0';
 
 export const BEAD_RADIUS = 0.085;
-export const MAX_PARTICLES = 4000;
+export const MAX_PARTICLES = 14400;
 
 const clamp01 = x => Math.min(1, Math.max(0, x));
 const smooth = x => x * x * (3 - 2 * x);
 
 export function windBudget(hardware, width, reducedMotion) {
-  return width <= 768 || hardware.hardwareConcurrency <= 4 || hardware.deviceMemory <= 4 || reducedMotion ? 1500 : MAX_PARTICLES;
+  return width <= 768 || hardware.hardwareConcurrency <= 4 || hardware.deviceMemory <= 4 || reducedMotion ? 4600 : MAX_PARTICLES;
 }
 
 export function particleCount(speed, density, budget) {
   if (speed <= 0) return 0;
-  const fraction = 0.13 + 0.58 * clamp01(speed / TURBINE_SPECS.maxWindSpeed);
+  const fraction = 0.26 + 0.46 * clamp01(speed / TURBINE_SPECS.maxWindSpeed);
   return Math.min(budget, Math.round(budget * fraction * densityPercent(density) / 100));
 }
 
@@ -121,9 +121,8 @@ export function createAirflow(capacity) {
   const previous = initialPose(), pose = initialPose(), keys = Object.keys(pose);
   let from = contactFrame(), to = contactFrame(), count = 0;
 
-  const seeds = createStreamSeeder(sampleField);
-  const ages = new Float64Array(capacity), active = new Uint8Array(capacity);
-  const contact = new Float32Array(capacity), born = new Uint8Array(capacity);
+  const seeds = createVolumeSeeder(sampleField);
+  const contact = new Float32Array(capacity);
   let lastWind = -1;
 
   function update(dt, telemetry, target, requested) {
@@ -133,10 +132,8 @@ export function createAirflow(capacity) {
     const steps = Math.max(1, Math.ceil(elapsed * 60)), h = elapsed / steps;
     setOperatingPoint(op, telemetry);
     seeds.prepare(op);
-    const lanes = lanesFor(next), rows = Math.ceil(next / lanes);
     const refill = count !== next || lastWind !== telemetry.windSpeed;
     lastWind = telemetry.windSpeed;
-    born.fill(0, 0, next);
     if (refill) Object.assign(previous, target);
     orientFrame(from, previous.angle, previous.pitch, previous.bladeZ);
     for (let j = 1; j <= steps; j++) {
@@ -145,37 +142,23 @@ export function createAirflow(capacity) {
       orientFrame(to, pose.angle, pose.pitch, pose.bladeZ);
       for (let i = 0; i < next; i++) {
         const offset = 3 * i;
-        const lane = streamIndex(i % lanes, lanes), period = seeds.period(lane);
         const fresh = refill && j === 1;
-        if (fresh) {
-          ages[i] = ((Math.floor(i / lanes) + 0.5) / rows) * period;
-        }
-        const nextAge = ages[i] + op.u * h;
-        const wrap = nextAge >= period;
-        if (fresh || wrap) {
-          if (wrap) ages[i] = 0;
-          seeds.place(p, lane, ages[i], pose.bladeZ);
+        if (fresh || positions[offset+2] < pose.bladeZ + OUTLET) {
+          seeds.place(p, i, pose.bladeZ, pose.towerY - 5 + BEAD_RADIUS, fresh);
           contact[i] = 0;
-          active[i] = born[i] = 1;
         } else {
-          p.x = positions[offset]; p.y = positions[offset + 1]; p.z = positions[offset + 2];
+          p.x = positions[offset]; p.y = positions[offset+1]; p.z = positions[offset+2];
         }
-        const advance = wrap ? (nextAge - period) / Math.max(0.001, op.u) : h;
-        ages[i] += op.u * advance;
-        if (!active[i]) continue;
         const x = p.x, y = p.y, z = p.z;
         sampleField(velocity, x, y - ROTOR.y, pose.bladeZ - z, op);
         obstacleVelocity(velocity, p, pose);
         if (velocity.y < 0) velocity.y *= clamp01(y - (pose.towerY - 5 + BEAD_RADIUS));
-        p.x += velocity.x * advance;
-        p.y += velocity.y * advance;
-        p.z += velocity.z * advance;
-        if (p.z < pose.bladeZ + OUTLET) active[i] = 0;
-        else {
-          excludeSolids(p, pose);
-          const hit = slidePastBlades(p, x, y, z, from, to, BEAD_RADIUS, advance);
-          contact[i] = hit ? 1 : Math.max(0, contact[i] - advance / 0.20);
-        }
+        p.x += velocity.x * h;
+        p.y += velocity.y * h;
+        p.z += velocity.z * h;
+        excludeSolids(p, pose);
+        const hit = slidePastBlades(p, x, y, z, from, to, BEAD_RADIUS, h);
+        contact[i] = hit ? 1 : Math.max(0, contact[i] - h / 0.20);
         positions[offset] = p.x;
         positions[offset + 1] = p.y;
         positions[offset + 2] = p.z;
@@ -187,13 +170,5 @@ export function createAirflow(capacity) {
     Object.assign(previous, target);
     count = next;
   }
-  // A historical point can be occupied by a blade in the current frame.
-  // Drop the trail there rather than drawing it through the moving surface.
-  function trailClear(p, target, radius) {
-    const x = p.x, y = p.y, z = p.z;
-    excludeSolids(p, target, radius);
-    if (Math.abs(x - p.x) + Math.abs(y - p.y) + Math.abs(z - p.z) > 1e-5) return false;
-    return !slidePastBlades(p, x, y, z, from, from, radius, 0);
-  }
-  return { positions, speedRatio, active, born, contact, update, trailClear };
+  return { positions, speedRatio, contact, update };
 }

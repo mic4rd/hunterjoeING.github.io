@@ -13,7 +13,7 @@ import {
 import { createWindTurbineModel } from './wt-model.js?v=0.2.0';
 
 const DEFAULT_CAMERA = {
-  normal: { pos: [21, 5, 23], target: [0, -1.3, 1.5] },
+  normal: { pos: [28, 7, 28], target: [0, -1.1, 3] },
   cutaway: { pos: [8.6, 2.3, 4.6], target: [0.0, 0.15, 0.2] },
   xray: { pos: [10.5, 2.6, 7.6], target: [0.0, -0.4, 0.0] },
   exploded: { pos: [23, 5, 25], target: [0, -2.8, 2.0] }
@@ -357,7 +357,7 @@ function init() {
     if (!part) {
       elInspector.innerHTML = `
         <div class="wt-inspector-empty">
-          Klicke ein Bauteil im 3D-Modell oder aktiviere <strong>Labels</strong>, um alle 12 Baugruppen im Detail zu untersuchen.
+          Klicke ein Bauteil im 3D-Modell oder aktiviere <strong>Labels</strong>, um alle ${TURBINE_PARTS.length} Baugruppen im Detail zu untersuchen.
         </div>`;
       return;
     }
